@@ -56,12 +56,13 @@ create or replace function session_role(p_token uuid) returns text
 language plpgsql security definer set search_path = public as $$
 declare r text;
 begin
-  update sessions set last_seen = now()
-   where token = p_token and last_seen < now() - interval '1 hour';
+  -- Prima il controllo, poi l'aggiornamento: una sessione scaduta non deve tornare valida.
   select role into r from sessions where token = p_token and last_seen > now() - interval '180 days';
   if r is null then
     raise exception 'Sessione scaduta, rientra con la password' using errcode = 'P0001', hint = 'session';
   end if;
+  update sessions set last_seen = now()
+   where token = p_token and last_seen < now() - interval '1 hour';
   return r;
 end $$;
 
@@ -89,9 +90,8 @@ declare
 begin
   delete from login_failures where at < now() - interval '1 day';
   delete from sessions where last_seen < now() - interval '180 days';
-  if (select count(*) from login_failures f where f.ip = v_ip and f.at > now() - interval '15 minutes') >= 10
-     -- Tetto che non dipende dall'indirizzo, contro chi ne usa molti.
-     or (select count(*) from login_failures f where f.at > now() - interval '15 minutes') >= 60 then
+  -- Limite per indirizzo. Niente tetto globale: basterebbe sbagliare apposta per chiudere fuori tutta la squadra.
+  if (select count(*) from login_failures f where f.ip = v_ip and f.at > now() - interval '15 minutes') >= 10 then
     raise exception 'Troppi tentativi. Riprova tra qualche minuto.' using errcode = 'P0001';
   end if;
   select * into t from team where id = 1;
