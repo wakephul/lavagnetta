@@ -80,8 +80,8 @@
   let canUndo = $state(false)
   let canRedo = $state(false)
 
-  function snapshot() {
-    undo.push(JSON.stringify(play.data))
+  function snapshot(before = JSON.stringify(play.data)) {
+    undo.push(before)
     if (undo.length > 80) undo.shift()
     redo = []
     canUndo = true
@@ -115,8 +115,59 @@
 
   function dirty() {
     status = 'pending'
+    writeDraft()
     clearTimeout(timer)
     timer = setTimeout(save, 900)
+  }
+
+  // Bozza sul dispositivo finché il salvataggio non va a buon fine: se la rete cade
+  // o la sessione scade, le modifiche non si perdono.
+  // svelte-ignore state_referenced_locally
+  const DRAFT_KEY = `lavagnetta.bozza.${source.id}`
+  function writeDraft() {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ name: play.name, data: play.data }))
+    } catch {
+      // Spazio esaurito o navigazione privata: resta solo il salvataggio online.
+    }
+  }
+  function clearDraft() {
+    try {
+      localStorage.removeItem(DRAFT_KEY)
+    } catch {
+      // Niente da togliere.
+    }
+  }
+  function readDraft(): { name: string; data: Play['data'] } | null {
+    try {
+      const d = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null')
+      if (!d) return null
+      if (d.name === source.name && JSON.stringify(d.data) === JSON.stringify(source.data)) {
+        clearDraft()
+        return null
+      }
+      return d
+    } catch {
+      return null
+    }
+  }
+  let pendingDraft = $state(readDraft())
+
+  function restoreDraft() {
+    const d = pendingDraft
+    if (!d) return
+    pendingDraft = null
+    change(() => {
+      play.name = d.name
+      play.data = d.data
+    })
+    current = -1
+    tool = 'arrange'
+  }
+
+  function discardDraft() {
+    pendingDraft = null
+    clearDraft()
   }
 
   async function save() {
@@ -129,7 +180,10 @@
         const r = await savePlay({ id: play.id, name: play.name, updated_at: play.updated_at, data: snap.data })
         play.updated_at = r.updated_at
         play.share_token = r.share_token
-        if (status === 'saving') status = 'saved'
+        if (status === 'saving') {
+          status = 'saved'
+          clearDraft()
+        }
       } catch (e) {
         status = e instanceof ApiError && e.kind === 'conflict' ? 'conflict' : 'error'
         statusMsg = e instanceof Error ? e.message : String(e)
@@ -150,8 +204,11 @@
   }
 
   onDestroy(() => {
-    if (status === 'pending') {
-      clearTimeout(timer)
+    clearTimeout(timer)
+    clearTimeout(previewEnd)
+    cancelAnimationFrame(raf)
+    if (status === 'pending' || status === 'error') {
+      status = 'pending'
       save()
     }
   })
@@ -159,7 +216,7 @@
   // --- Disegno sul campo ---
   type Draft = { kind: Tool; who: number; pts: Vec[]; side: 'off' | 'def' }
   let draft = $state<Draft | null>(null)
-  let dragging: { i: number; moved: boolean } | null = null
+  let dragging: { i: number; moved: boolean; before: string } | null = null
 
   const hit = (list: Vec[], p: Vec, r = 0.8) => {
     let best = -1
@@ -188,8 +245,8 @@
         if (data.start.ball !== i + 1) change(() => (play.data.start.ball = (i + 1) as Slot))
         return
       }
-      snapshot()
-      dragging = { i, moved: false }
+      // Lo stato per annullare si salva solo se il giocatore si sposta davvero.
+      dragging = { i, moved: false, before: JSON.stringify(play.data) }
       return
     }
     if (!phase) return
@@ -213,6 +270,7 @@
           })
           return
         }
+        if (holderNow < 0 && (tool === 'pass' || tool === 'dribble')) return flash('Dopo il tiro nessuno ha la palla.')
         if (tool === 'pass' && i !== holderNow) return flash(`La palla ce l'ha il ${holderNow + 1}.`)
         if (tool === 'dribble' && i !== holderNow && i !== run!.start.holder) return flash('Palleggia solo chi ha la palla.')
         draft = { kind: tool, who: i, pts: [startFrame.off[i]], side: 'off' }
@@ -232,6 +290,7 @@
 
   function onMove(p: Vec) {
     if (dragging) {
+      if (!dragging.moved) snapshot(dragging.before)
       dragging.moved = true
       play.data.start.offense[dragging.i] = { x: round(p.x), y: round(p.y) }
       return
@@ -247,8 +306,6 @@
   function onUp(p: Vec) {
     if (dragging) {
       if (dragging.moved) dirty()
-      else undo.pop()
-      canUndo = undo.length > 0
       dragging = null
       return
     }
@@ -301,6 +358,11 @@
 
   // --- Fasi e letture ---
   function addPhase() {
+    const along = phasesAlong(play.data, choices)
+    if (along.at(-1)?.actions.some((a) => a.type === 'shot')) {
+      selectPhase(along.length - 1)
+      return flash('Dopo il tiro lo schema finisce. Togli il tiro per aggiungere una fase.')
+    }
     change(() => {
       const ph = newPhase()
       const along = phasesAlong(play.data, choices)
@@ -430,9 +492,11 @@
 
   // --- Anteprima ---
   let raf = 0
+  let previewEnd: ReturnType<typeof setTimeout> | undefined
   function preview() {
     if (!run) return
     cancelAnimationFrame(raf)
+    clearTimeout(previewEnd)
     const dur = run.plan.dur
     let last = performance.now()
     previewT = 0
@@ -442,7 +506,7 @@
       last = now
       if (previewT >= dur) {
         previewT = dur
-        setTimeout(() => (previewT = null), 700)
+        previewEnd = setTimeout(() => (previewT = null), 700)
         return
       }
       raf = requestAnimationFrame(tick)
@@ -478,8 +542,16 @@
   async function removePlay() {
     if (!confirm(`Elimino lo schema "${play.name}"? Non si può annullare.`)) return
     clearTimeout(timer)
+    try {
+      await deletePlay(play.id)
+    } catch (e) {
+      settings.close()
+      status = 'error'
+      statusMsg = e instanceof Error ? e.message : String(e)
+      return
+    }
     status = 'saved'
-    await deletePlay(play.id)
+    clearDraft()
     go('/')
   }
 
@@ -525,6 +597,7 @@
   const hint = $derived.by(() => {
     if (note) return note
     if (current < 0) return tool === 'ball' ? 'Tocca il giocatore che ha la palla all’inizio.' : 'Trascina i giocatori nella posizione di partenza.'
+    if (holderNow < 0 && (tool === 'dribble' || tool === 'pass' || tool === 'shot')) return 'Dopo il tiro nessuno ha la palla.'
     switch (tool) {
       case 'move':
         return 'Trascina da un giocatore fino a dove arriva.'
@@ -565,6 +638,14 @@
       {:else}
         <button class="btn" onclick={() => ((status = 'pending'), save())}>Riprova</button>
       {/if}
+    </div>
+  {/if}
+
+  {#if pendingDraft}
+    <div class="alert draft small" role="alert">
+      Su questo dispositivo ci sono modifiche a questo schema che non erano state salvate.
+      <button class="btn" onclick={restoreDraft}>Ripristinale</button>
+      <button class="btn quiet" onclick={discardDraft}>Scartale</button>
     </div>
   {/if}
 
@@ -775,6 +856,11 @@
     border-radius: var(--radius);
     background: #fdf3f2;
     color: var(--danger);
+  }
+  .alert.draft {
+    border-color: var(--border);
+    background: var(--surface);
+    color: var(--ink);
   }
   .stage {
     margin: 0 -16px;

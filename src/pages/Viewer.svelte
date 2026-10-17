@@ -4,6 +4,7 @@
   import Icon from '../components/Icon.svelte'
   import Phases from '../components/Phases.svelte'
   import { marks, type Mark } from '../lib/draw'
+  import { BASKET } from '../lib/court'
   import { dist, type Vec } from '../lib/geo'
   import { phasesAlong } from '../lib/play'
   import { frameAt, initState, runPath, stateFrame, type PhaseRun } from '../lib/sim'
@@ -157,7 +158,7 @@
   }
 
   // --- Mettiti alla prova ---
-  type Question = { kind: 'move' | 'pass' | 'stay'; expected?: Vec; receiver?: number }
+  type Question = { kind: 'move' | 'pass' | 'shot' | 'stay'; expected?: Vec; receiver?: number }
   type Quiz = {
     qs: Question[]
     qi: number
@@ -176,6 +177,7 @@
     if (m) qs.push({ kind: 'move', expected: m.line.end, at: m.t0 })
     const p = r.plan.passes.find((p) => p.a === i)
     if (p) qs.push({ kind: 'pass', receiver: p.b, at: p.rel })
+    if (r.plan.shot?.i === i) qs.push({ kind: 'shot', at: r.plan.shot.rel })
     qs.sort((a, b) => a.at - b.at)
     return qs.length ? qs : [{ kind: 'stay' }]
   }
@@ -204,13 +206,15 @@
     quiz = { qs: questions(runs[0], me), qi: 0, step: 'ask', tap: null, ok: false, right: 0, total: 0 }
   }
 
-  function answer(kind: 'tap' | 'stay', p?: Vec) {
+  function answer(kind: 'tap' | 'stay' | 'shot', p?: Vec) {
     if (!quiz || quiz.step !== 'ask' || !run || me === null) return
     const q = quiz.qs[quiz.qi]
     let ok = false
     if (kind === 'stay') ok = q.kind === 'stay'
+    else if (kind === 'shot') ok = q.kind === 'shot'
     else if (p) {
-      if (q.kind === 'move') ok = dist(p, q.expected!) <= 1.8
+      if (q.kind === 'shot') ok = dist(p, BASKET) < 1.2
+      else if (q.kind === 'move') ok = dist(p, q.expected!) <= 1.8
       else if (q.kind === 'stay') ok = dist(p, run.start.off[me]) <= 1.2
       else {
         // Si può toccare il compagno dove si trova ora o dove riceverà.
@@ -261,6 +265,8 @@
   }
 
   const question = $derived(quiz && quiz.step !== 'done' ? quiz.qs[quiz.qi] : null)
+  // "Tiro" compare per chiunque possa avere la palla nella fase, così non suggerisce la risposta.
+  const mayShoot = $derived(!!run && me !== null && (run.start.holder === me || run.plan.passes.some((p) => p.b === me)))
   const prompt = $derived.by(() => {
     if (!quiz || !question) return ''
     const n = `Fase ${k + 1}`
@@ -273,6 +279,7 @@
       if (quiz.ok) return 'Giusto.'
       if (question.kind === 'move') return 'No. Il cerchio indica dove dovevi andare.'
       if (question.kind === 'pass') return `No. Dovevi passare al ${(question.receiver ?? 0) + 1}.`
+      if (question.kind === 'shot') return 'No. Qui tiri.'
       return 'No. In questa fase resti dove sei.'
     }
     return ''
@@ -370,6 +377,7 @@
           <div class="row">
             {#if quiz.step === 'ask'}
               <button class="btn" onclick={() => answer('stay')}>Resto qui</button>
+              {#if mayShoot}<button class="btn" onclick={() => answer('shot')}>Tiro</button>{/if}
             {:else if quiz.step === 'reveal'}
               <button class="btn primary" onclick={quizContinue}>{quiz.qi + 1 < quiz.qs.length ? 'Avanti' : 'Guarda la fase'}</button>
             {/if}

@@ -90,6 +90,8 @@ declare
 begin
   delete from login_failures where at < now() - interval '1 day';
   delete from sessions where last_seen < now() - interval '180 days';
+  -- Le richieste dallo stesso indirizzo passano una alla volta, così una raffica non supera il limite.
+  perform pg_advisory_xact_lock(hashtext(v_ip));
   -- Limite per indirizzo. Niente tetto globale: basterebbe sbagliare apposta per chiudere fuori tutta la squadra.
   if (select count(*) from login_failures f where f.ip = v_ip and f.at > now() - interval '15 minutes') >= 10 then
     raise exception 'Troppi tentativi. Riprova tra qualche minuto.' using errcode = 'P0001';
@@ -208,6 +210,11 @@ begin
   perform require_edit(p_token);
   if char_length(p_password) < 8 then
     raise exception 'La password deve avere almeno 8 caratteri' using errcode = 'P0001';
+  end if;
+  -- Se fossero uguali, chi entra con la password della squadra entrerebbe come allenatore.
+  if exists (select 1 from team where id = 1 and crypt(p_password, case p_kind when 'view' then edit_hash else view_hash end)
+             = case p_kind when 'view' then edit_hash else view_hash end) then
+    raise exception 'Deve essere diversa dall''altra password' using errcode = 'P0001';
   end if;
   if p_kind = 'view' then
     update team set view_hash = crypt(p_password, gen_salt('bf')) where id = 1;

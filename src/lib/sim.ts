@@ -102,7 +102,11 @@ export function plan(st: State, phase: Phase, read: Read | undefined, defaultCov
       if (A !== h || A === B) continue
       const mA = moves[A]
       const ready = mA && mA.kind === 'dribble' ? Math.max(have, motionEnd(mA)) : have
-      const arrive = motionEnd(moves[B])
+      // Si aspetta il ricevitore solo se si muove per smarcarsi. Se si muove dopo
+      // aver ricevuto (palleggio, o un altro passaggio prima di tagliare) riceve da fermo.
+      const mB = moves[B]
+      const passesLater = passActs.slice(passActs.indexOf(a) + 1).some((p) => p.from - 1 === B)
+      const arrive = mB && (mB.kind === 'dribble' || passesLater) ? 0 : motionEnd(mB)
       let rel = ready
       let cat = ready
       for (let k = 0; k < 3; k++) {

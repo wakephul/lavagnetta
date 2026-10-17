@@ -35,6 +35,23 @@ describe('attacco', () => {
     expect(run.plan.moves[0]!.t0).toBeGreaterThan(run.plan.passes[0].rel)
   })
 
+  it('chi riceve e poi palleggia riceve da fermo, senza ritardi', () => {
+    const [run] = runPath(
+      play([
+        [
+          { id: 'a', type: 'pass', from: 1, to: 2 },
+          { id: 'b', type: 'dribble', slot: 2, path: [{ x: 8.2, y: 1.9 }] },
+        ],
+      ]),
+      [],
+    )
+    const p = run.plan.passes[0]
+    expect(p.rel).toBeLessThan(0.1)
+    expect(dist(p.p1, run.start.off[1])).toBeLessThan(0.01)
+    expect(run.plan.moves[1]!.t0).toBeGreaterThan(p.catch)
+    expect(run.plan.dur).toBeLessThan(6)
+  })
+
   it('chi usa il blocco aspetta che sia piazzato', () => {
     const [run] = runPath(
       play([
