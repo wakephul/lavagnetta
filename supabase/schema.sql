@@ -58,7 +58,7 @@ declare r text;
 begin
   update sessions set last_seen = now()
    where token = p_token and last_seen < now() - interval '1 hour';
-  select role into r from sessions where token = p_token;
+  select role into r from sessions where token = p_token and last_seen > now() - interval '180 days';
   if r is null then
     raise exception 'Sessione scaduta, rientra con la password' using errcode = 'P0001', hint = 'session';
   end if;
@@ -80,13 +80,18 @@ create or replace function login(p_password text) returns json
 language plpgsql security definer set search_path = public, extensions as $$
 declare
   t team;
-  v_ip text := coalesce(split_part(current_setting('request.headers', true)::json ->> 'x-forwarded-for', ',', 1), 'sconosciuto');
+  h json := current_setting('request.headers', true)::json;
+  -- cf-connecting-ip lo scrive Cloudflare e il client non può falsificarlo;
+  -- di x-forwarded-for vale solo l'ultimo indirizzo, aggiunto dal proxy.
+  v_ip text := coalesce(h ->> 'cf-connecting-ip', trim(reverse(split_part(reverse(h ->> 'x-forwarded-for'), ',', 1))), 'sconosciuto');
   r text;
   tok uuid;
 begin
   delete from login_failures where at < now() - interval '1 day';
-  delete from sessions where last_seen < now() - interval '1 year';
-  if (select count(*) from login_failures f where f.ip = v_ip and f.at > now() - interval '15 minutes') >= 10 then
+  delete from sessions where last_seen < now() - interval '180 days';
+  if (select count(*) from login_failures f where f.ip = v_ip and f.at > now() - interval '15 minutes') >= 10
+     -- Tetto che non dipende dall'indirizzo, contro chi ne usa molti.
+     or (select count(*) from login_failures f where f.at > now() - interval '15 minutes') >= 60 then
     raise exception 'Troppi tentativi. Riprova tra qualche minuto.' using errcode = 'P0001';
   end if;
   select * into t from team where id = 1;
@@ -201,8 +206,8 @@ create or replace function set_password(p_token uuid, p_kind text, p_password te
 language plpgsql security definer set search_path = public, extensions as $$
 begin
   perform require_edit(p_token);
-  if char_length(p_password) < 6 then
-    raise exception 'La password deve avere almeno 6 caratteri' using errcode = 'P0001';
+  if char_length(p_password) < 8 then
+    raise exception 'La password deve avere almeno 8 caratteri' using errcode = 'P0001';
   end if;
   if p_kind = 'view' then
     update team set view_hash = crypt(p_password, gen_salt('bf')) where id = 1;

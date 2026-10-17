@@ -73,11 +73,11 @@
         <p class="muted small">{help}</p>
         <label class="field">
           Nuova password
-          <input type="password" bind:value={pw[k].value} autocomplete="new-password" minlength="6" />
+          <input type="password" bind:value={pw[k].value} autocomplete="new-password" minlength="8" />
         </label>
         <div class="actions">
           {#if pw[k].msg}<span class="small muted">{pw[k].msg}</span>{/if}
-          <button class="btn" disabled={pw[k].value.length < 6}>Cambia</button>
+          <button class="btn" disabled={pw[k].value.length < 8}>Cambia</button>
         </div>
       </form>
     </section>
