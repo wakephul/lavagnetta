@@ -26,6 +26,15 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+      - name: Controlla le variabili del database
+        run: |
+          [ -n "$VITE_SUPABASE_URL" ] && [ -n "$VITE_SUPABASE_KEY" ] || {
+            echo "::error::Mancano le variabili SUPABASE_URL e SUPABASE_KEY (Settings → Secrets and variables → Actions → Variables)"
+            exit 1
+          }
+        env:
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_KEY: ${{ vars.SUPABASE_KEY }}
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}

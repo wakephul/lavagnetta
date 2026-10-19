@@ -5,6 +5,7 @@
   import { dist, type Vec } from '../lib/geo'
   import type { Frame } from '../lib/sim'
   import type { Situation } from '../lib/types'
+  import { inkOn } from '../lib/color'
   import Court from './Court.svelte'
 
   type Props = {
@@ -20,6 +21,10 @@
     selected?: string | null
     picked?: { side: 'off' | 'def'; i: number } | null
     draft?: string | null
+    /** Maniglie per trascinare la fine di un movimento selezionato. */
+    handles?: Vec[]
+    /** Segni da evidenziare come problematici. */
+    warn?: Set<string>
     fade?: number
     label?: string
     overlay?: Snippet
@@ -41,6 +46,8 @@
     selected = null,
     picked = null,
     draft = null,
+    handles = [],
+    warn,
     fade = 1,
     label = '',
     overlay,
@@ -54,6 +61,7 @@
 
   let svg: SVGSVGElement
   const view = $derived(viewFor(situation))
+  const ink = $derived(inkOn(color))
 
   function toCourt(e: PointerEvent): Vec {
     const m = svg.getScreenCTM()
@@ -84,7 +92,7 @@
   })
 
   const facing = (p: Vec) => (Math.atan2(frame.ball.y - p.y, frame.ball.x - p.x) * 180) / Math.PI
-  const markColor = (who: number) => (me === null ? 'var(--ink)' : who === me ? color : 'var(--muted-ink)')
+  const markColor = (m: Mark) => (warn?.has(m.id) ? 'var(--danger)' : me === null ? 'var(--ink)' : m.who === me ? color : 'var(--muted-ink)')
 </script>
 
 <svg
@@ -107,7 +115,7 @@
 
   <g class="marks" opacity={fade}>
     {#each marks as m (m.id)}
-      {@const c = markColor(m.who)}
+      {@const c = markColor(m)}
       {@const w = me !== null && m.who === me ? 0.11 : 0.075}
       <g class:sel={selected === m.id}>
         {#if selected === m.id}
@@ -166,8 +174,8 @@
       {#if me === i || (picked?.side === 'off' && picked.i === i)}
         <circle r={OFF_R + 0.18} fill="none" stroke={me === i ? color : 'var(--ink)'} stroke-width="0.09" />
       {/if}
-      <circle r={OFF_R} fill={color} stroke="#fff" stroke-width="0.07" />
-      <text class="num" fill="#fff" font-size="0.52">{i + 1}</text>
+      <circle r={OFF_R} fill={color} stroke={ink === '#fff' ? '#fff' : '#1f1d1a'} stroke-width="0.07" />
+      <text class="num" fill={ink} font-size="0.52">{i + 1}</text>
       {#if names[i]}
         <text class="name" y={OFF_R + 0.5} font-size="0.44">{names[i]}</text>
       {/if}
@@ -178,6 +186,10 @@
     <circle r={ballDraw.r} fill="var(--ball)" stroke="#6b3206" stroke-width="0.03" />
     <path d="M{-ballDraw.r} 0H{ballDraw.r}M0 {-ballDraw.r}V{ballDraw.r}" stroke="#6b3206" stroke-width="0.02" />
   </g>
+
+  {#each handles as h}
+    <circle cx={h.x} cy={h.y} r="0.3" fill="#fff" stroke={color} stroke-width="0.08" class="handle" />
+  {/each}
 
   {@render overlay?.()}
 </svg>

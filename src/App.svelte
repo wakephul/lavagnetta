@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { inkOn } from './lib/color'
   import { match, route } from './lib/router.svelte'
   import { app, canEdit, load, teamColor } from './lib/store.svelte'
   import Editor from './pages/Editor.svelte'
@@ -35,7 +36,7 @@
     {/if}
   </main>
 {:else}
-  <div class="app" style="--accent: {teamColor()}">
+  <div class="app" style="--accent: {teamColor()}; --accent-ink: {inkOn(teamColor())}">
     {#if route.path === '/allenatore'}
       {#if canEdit()}
         <Home />
@@ -48,7 +49,7 @@
       <Settings />
     {:else if edit && play && canEdit()}
       {#key play.id}<Editor source={play} />{/key}
-    {:else if view && play}
+    {:else if (view || edit) && play}
       {#key play.id}<Viewer name={play.name} data={play.data} color={teamColor()} playId={play.id} share={play.share_token} />{/key}
     {:else if view || edit}
       <main class="page"><p class="muted" style="margin-top: 40px">Schema non trovato. <a href="#/">Torna agli schemi</a></p></main>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '../lib/api'
+  import { inkOn } from '../lib/color'
   import type { PlayData } from '../lib/types'
   import Viewer from './Viewer.svelte'
 
@@ -25,7 +26,7 @@
 </script>
 
 {#if result}
-  <div style="--accent: {result.color}">
+  <div style="--accent: {result.color}; --accent-ink: {inkOn(result.color)}">
     <Viewer name={result.name} data={result.data} color={result.color} shared />
   </div>
 {:else if error}

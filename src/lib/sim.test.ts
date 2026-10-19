@@ -119,3 +119,24 @@ describe('difesa', () => {
     expect(JSON.stringify(runPath(data, []))).toBe(JSON.stringify(runPath(data, [])))
   })
 })
+
+describe('colori', async () => {
+  const { inkOn } = await import('./color')
+  it('scrive in bianco sui colori scuri e in nero su quelli chiari', () => {
+    expect(inkOn('#1d5fbf')).toBe('#fff')
+    expect(inkOn('#000000')).toBe('#fff')
+    expect(inkOn('#ffd200')).toBe('#1f1d1a')
+    expect(inkOn('#ffffff')).toBe('#1f1d1a')
+  })
+})
+
+describe('ribaltare', async () => {
+  const { mirrored } = await import('./play')
+  it('ribaltato due volte torna uguale, e la difesa si specchia', () => {
+    const data = play([[{ id: 'a', type: 'pass', from: 1, to: 2 }, { id: 'b', type: 'move', slot: 3, path: [{ x: 4, y: 2 }] }]])
+    expect(mirrored(mirrored(data))).toEqual(data)
+    const a = runPath(data, [])[0].end
+    const b = runPath(mirrored(data), [])[0].end
+    a.def.forEach((p, i) => expect(Math.abs(15 - p.x - b.def[i].x) + Math.abs(p.y - b.def[i].y)).toBeLessThan(0.05))
+  })
+})

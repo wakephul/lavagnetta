@@ -3,6 +3,7 @@
   import * as THREE from 'three'
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
   import { BASKET, BOARD_Y, RIM_R, courtShapes, viewFor } from '../lib/court'
+  import { inkOn } from '../lib/color'
   import { dist } from '../lib/geo'
   import type { Frame } from '../lib/sim'
   import type { Situation } from '../lib/types'
@@ -107,7 +108,7 @@
     head.position.y = 1.53
     head.castShadow = true
     g.add(head)
-    const num = textSprite(String(n), 0.42, '#fff', side === 'off' ? color : css('--def'))
+    const num = textSprite(String(n), 0.42, side === 'off' ? inkOn(color) : '#fff', side === 'off' ? color : css('--def'))
     num.position.y = 2.15
     g.add(num)
     return g

@@ -4,9 +4,10 @@
   import Icon from '../components/Icon.svelte'
   import Phases from '../components/Phases.svelte'
   import { marks, type Mark } from '../lib/draw'
+  import { inkOn } from '../lib/color'
   import { BASKET } from '../lib/court'
   import { dist, type Vec } from '../lib/geo'
-  import { phasesAlong } from '../lib/play'
+  import { mirrored, phasesAlong } from '../lib/play'
   import { frameAt, initState, runPath, stateFrame, type PhaseRun } from '../lib/sim'
   import { app, canEdit, setLineup, shareUrl } from '../lib/store.svelte'
   import { DEFENSE_NAMES, ROLE_NAMES, SLOTS, type DefenseType, type PlayData } from '../lib/types'
@@ -17,8 +18,11 @@
   // svelte-ignore state_referenced_locally
   let defense = $state<DefenseType>(data.defense)
   let choices = $state<number[]>([])
-  const runs = $derived(runPath(data, choices, defense))
-  const phases = $derived(phasesAlong(data, choices))
+  // Ribaltato: lo stesso schema giocato sull'altro lato del campo.
+  let flip = $state(false)
+  const shown = $derived(flip ? mirrored(data) : data)
+  const runs = $derived(runPath(shown, choices, defense))
+  const phases = $derived(phasesAlong(shown, choices))
 
   let k = $state(0)
   let t = $state(0)
@@ -28,7 +32,7 @@
   let view3d = $state(false)
 
   const run = $derived<PhaseRun | null>(runs[k] ?? null)
-  const frame = $derived(run ? frameAt(run, t) : stateFrame(initState(data, defense)))
+  const frame = $derived(run ? frameAt(run, t) : stateFrame(initState(shown, defense)))
   const phaseMarks = $derived(run ? marks(run.plan, run.phase.actions) : [])
   const atEnd = $derived(!run || (k === runs.length - 1 && t >= run.plan.dur - 1e-3))
 
@@ -183,7 +187,7 @@
   }
 
   function randomRead(i: number) {
-    const ph = phasesAlong(data, choices)[i]
+    const ph = phasesAlong(shown, choices)[i]
     if (!ph || ph.reads.length < 2) return
     const c = choices.slice()
     c[i] = Math.floor(Math.random() * ph.reads.length)
@@ -425,7 +429,7 @@
       <div class="me" role="group" aria-label="Chi sei">
         {#each SLOTS as s, i}
           <button class="chip" aria-pressed={me === i} onclick={() => setMe(i)}>
-            <span class="dot" style="background:{color}">{s}</span>{names[i] ?? ROLE_NAMES[s]}
+            <span class="dot" style="background:{color}; color:{inkOn(color)}">{s}</span>{names[i] ?? ROLE_NAMES[s]}
           </button>
         {/each}
       </div>
@@ -440,7 +444,7 @@
           <div class="lineup">
             {#each SLOTS as s, i}
               <label>
-                <span class="dot" style="background:{color}">{s}</span>
+                <span class="dot" style="background:{color}; color:{inkOn(color)}">{s}</span>
                 <select value={lineup.players[i] ?? ''} onchange={(e) => setPlayer(i, e.currentTarget.value)}>
                   <option value="">{ROLE_NAMES[s]}</option>
                   {#each roster as p}<option value={p.id}>{p.number != null ? `${p.number} ` : ''}{p.name}</option>{/each}
@@ -467,6 +471,14 @@
         {#if defense !== data.defense}
           <p class="small muted">Lo schema è pensato contro {DEFENSE_NAMES[data.defense].toLowerCase()}: qui la difesa si muove da sola, senza le correzioni dell'allenatore.</p>
         {/if}
+      </div>
+
+      <div class="defense">
+        <h2>Lato</h2>
+        <div class="seg" role="group" aria-label="Lato">
+          <button aria-pressed={!flip} onclick={() => ((flip = false), goPhase(0))}>Come disegnato</button>
+          <button aria-pressed={flip} onclick={() => ((flip = true), goPhase(0))}>Dall'altro lato</button>
+        </div>
       </div>
 
       {#if data.notes}

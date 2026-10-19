@@ -6,8 +6,8 @@
   import { ApiError } from '../lib/api'
   import { defaultStart } from '../lib/court'
   import { arrowHead, markAt, marks, polyD } from '../lib/draw'
-  import { Line, dist, simplify, smooth, type Vec } from '../lib/geo'
-  import { cloneBranch, newPhase, newRead, phasesAlong } from '../lib/play'
+  import { Line, dist, lerp, simplify, smooth, type Vec } from '../lib/geo'
+  import { cloneBranch, newPhase, newRead, outOfBounds, phasesAlong } from '../lib/play'
   import { go } from '../lib/router.svelte'
   import { frameAt, initState, runPath, stateFrame } from '../lib/sim'
   import { deletePlay, load, newShareLink, savePlay, shareUrl, teamColor } from '../lib/store.svelte'
@@ -65,6 +65,36 @@
         const line = new Line(smooth([run.start.def[Number(d)], ...path]))
         return { d: polyD(line.pts), head: arrowHead(line.end, line.endDir(), 0.32), key: d, line }
       })
+  })
+
+  /** Fine del movimento selezionato: si può trascinare per ritoccarla. */
+  const handle = $derived.by(() => {
+    if (!selected || !run || previewT !== null) return null
+    if (selected.startsWith('def:')) return defLines.find((l) => `def:${l.key}` === selected)?.line.end ?? null
+    const m = run.plan.moves.find((m) => m?.action.id === selected)
+    return m ? m.line.end : null
+  })
+
+  /** Avvisi su cose che in partita non funzionerebbero. */
+  const checks = $derived.by(() => {
+    const list: string[] = []
+    const risky = new Set<string>()
+    if (!run) return { list, risky }
+    const h = run.start.holder
+    if (h >= 0 && outOfBounds(run.start.off[h]) && run.plan.moves[h] && !run.plan.passes.some((p) => p.a === h))
+      list.push(`Il ${h + 1} rimette da fuori: deve passare la palla prima di entrare.`)
+    for (const p of run.plan.passes) {
+      for (let u = 0.15; u <= 0.86; u += 0.05) {
+        const f = frameAt(run, p.rel + u * (p.catch - p.rel))
+        const ball = lerp(p.p0, p.p1, u)
+        const d = f.def.findIndex((q) => dist(q, ball) < 0.6)
+        if (d < 0) continue
+        risky.add(p.action.id)
+        list.push(`Passaggio dal ${p.a + 1} al ${p.b + 1} a rischio: il difensore X${d + 1} è sulla linea.`)
+        break
+      }
+    }
+    return { list, risky }
   })
 
   /** Chi ha la palla quando si disegna la prossima azione: dopo i passaggi già messi. */
@@ -217,6 +247,7 @@
   type Draft = { kind: Tool; who: number; pts: Vec[]; side: 'off' | 'def' }
   let draft = $state<Draft | null>(null)
   let dragging: { i: number; moved: boolean; before: string } | null = null
+  let endDrag: { moved: boolean; before: string } | null = null
 
   const hit = (list: Vec[], p: Vec, r = 0.8) => {
     let best = -1
@@ -251,6 +282,11 @@
     }
     if (!phase) return
 
+    if (handle && dist(p, handle) < 0.6) {
+      endDrag = { moved: false, before: JSON.stringify(play.data) }
+      return
+    }
+
     if (tool === 'defense') {
       const d = hit(startFrame.def, p)
       if (d >= 0) {
@@ -273,6 +309,7 @@
         if (holderNow < 0 && (tool === 'pass' || tool === 'dribble')) return flash('Dopo il tiro nessuno ha la palla.')
         if (tool === 'pass' && i !== holderNow) return flash(`La palla ce l'ha il ${holderNow + 1}.`)
         if (tool === 'dribble' && i !== holderNow && i !== run!.start.holder) return flash('Palleggia solo chi ha la palla.')
+        if (tool === 'dribble' && i === run!.start.holder && outOfBounds(run!.start.off[i])) return flash('Da fuori campo non si palleggia: prima il passaggio.')
         draft = { kind: tool, who: i, pts: [startFrame.off[i]], side: 'off' }
         return
       }
@@ -289,6 +326,19 @@
   }
 
   function onMove(p: Vec) {
+    if (endDrag && selected && read && phase) {
+      if (!endDrag.moved) snapshot(endDrag.before)
+      endDrag.moved = true
+      const q = { x: round(p.x), y: round(p.y) }
+      if (selected.startsWith('def:')) {
+        const path = read.defense[selected.slice(4)]
+        if (path?.length) path[path.length - 1] = q
+      } else {
+        const a = phase.actions.find((a) => a.id === selected)
+        if (a && 'path' in a && a.path.length) a.path[a.path.length - 1] = q
+      }
+      return
+    }
     if (dragging) {
       if (!dragging.moved) snapshot(dragging.before)
       dragging.moved = true
@@ -304,6 +354,11 @@
   const round = (n: number) => Math.round(n * 100) / 100
 
   function onUp(p: Vec) {
+    if (endDrag) {
+      if (endDrag.moved) dirty()
+      endDrag = null
+      return
+    }
     if (dragging) {
       if (dragging.moved) dirty()
       dragging = null
@@ -659,6 +714,8 @@
       {defLines}
       {selected}
       draft={draftD}
+      handles={handle ? [handle] : []}
+      warn={checks.risky}
       fade={previewT !== null ? 0.4 : 1}
       label="Lavagna di {play.name}"
       ondown={onDown}
@@ -707,6 +764,9 @@
   </div>
 
   <p class="hint small" class:warn={!!note}>{hint}</p>
+  {#each checks.list as w}
+    <p class="hint small warn">{w}</p>
+  {/each}
 
   <Phases
     {phases}

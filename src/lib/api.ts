@@ -13,6 +13,7 @@ export class ApiError extends Error {
 }
 
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+  if (!URL || !KEY) throw new ApiError('Il sito non è collegato a un database: mancano VITE_SUPABASE_URL e VITE_SUPABASE_KEY.', 'other')
   const headers: Record<string, string> = { apikey: KEY, 'Content-Type': 'application/json' }
   // Le chiavi "legacy" sono JWT e vanno anche in Authorization; quelle nuove no.
   if (KEY.startsWith('eyJ')) headers.Authorization = `Bearer ${KEY}`
@@ -23,10 +24,16 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     throw new ApiError('Nessuna connessione. Controlla la rete e riprova.', 'network')
   }
   const text = await res.text()
-  const body = text ? JSON.parse(text) : null
+  let body = null
+  try {
+    body = text ? JSON.parse(text) : null
+  } catch {
+    // Pagina d'errore del server invece di dati: si mostra lo stato HTTP.
+    if (res.ok) throw new ApiError('Risposta del server non valida. Riprova tra poco.', 'other')
+  }
   if (!res.ok) {
     const kind = body?.hint === 'session' ? 'session' : body?.hint === 'conflict' ? 'conflict' : 'other'
-    throw new ApiError(body?.message ?? `Errore ${res.status}`, kind)
+    throw new ApiError(body?.message ?? `Il server non risponde (errore ${res.status}). Riprova tra poco.`, kind)
   }
   return body as T
 }

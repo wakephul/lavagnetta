@@ -85,7 +85,7 @@ textarea {
 .btn.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink, #fff);
 }
 .btn.danger {
   color: var(--danger);
