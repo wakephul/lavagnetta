@@ -1,5 +1,5 @@
-import { BASKET } from './court'
-import { driveHelpSpot, isZone, manSpot, zoneSpots, type Scene } from './defense'
+import { BASKET, outOfBounds } from './court'
+import { boxOut, driveHelpSpot, isZone, manSpot, onePassAway, weakSide, zoneSpots, type Scene } from './defense'
 import { Line, add, clamp, dist, lerp, mul, profile, segDist, smooth, sub, unit, type Vec } from './geo'
 import type { Action, Coverage, DefenseType, MoveKind, Phase, PlayData, Read } from './types'
 
@@ -17,6 +17,7 @@ const DEF_HAND = 4.0
 const PASS_V = 8.5
 const BODY = 0.7
 const USES_SCREEN = 1.5
+const SHOT_GATHER = 0.5 // dalla ricezione (o dall'arresto) al tiro
 
 export type State = { off: Vec[]; def: Vec[]; holder: number; assign: number[]; presser: number }
 export type Frame = { off: Vec[]; def: Vec[]; ball: Vec; bz: number; holder: number }
@@ -25,7 +26,17 @@ type MoveAction = Extract<Action, { type: MoveKind }>
 type PassAction = Extract<Action, { type: 'pass' }>
 
 export type Motion = { action: MoveAction; i: number; kind: MoveKind; line: Line; prof: ReturnType<typeof profile>; t0: number }
-export type PassTiming = { action: PassAction; a: number; b: number; rel: number; catch: number; p0: Vec; p1: Vec }
+export type PassTiming = {
+  action: PassAction
+  a: number
+  b: number
+  rel: number
+  catch: number
+  p0: Vec
+  p1: Vec
+  /** Consegnato: quando il passatore è pronto e dove il ricevitore gli passa accanto. */
+  hand?: { ready: number; s: number }
+}
 export type ShotTiming = { i: number; rel: number; land: number; p0: Vec }
 export type ScreenTiming = { action: MoveAction; j: number; spot: Vec; tSet: number; users: { u: number; tPass: number }[]; coverage: Coverage }
 
@@ -45,8 +56,9 @@ const motionEnd = (m: Motion | null) => (m ? m.t0 + m.prof.dur : 0)
 
 /**
  * Se chi si muove lungo `line` usa il blocco, restituisce il punto (lunghezza d'arco)
- * in cui supera il bloccante: quando attraversa l'asse del bloccante, cioè la direzione
- * da cui è arrivato. Se non lo attraversa vale il punto più vicino.
+ * in cui supera il bloccante: dove attraversa l'asse del bloccante (la direzione da cui
+ * è arrivato), altrimenti dove gli passa più vicino a metà percorso. Chi parte accanto
+ * al punto del blocco (il blocco viene a lui) lo usa dall'inizio.
  */
 function screenUse(line: Line, screen: Motion): number | null {
   const spot = screen.line.end
@@ -64,7 +76,8 @@ function screenUse(line: Line, screen: Motion): number | null {
     if (dist(lerp(a, b, k), spot) > 2.2) continue
     return line.cum[i - 1] + (line.cum[i] - line.cum[i - 1]) * k
   }
-  return c.s
+  if (c.s > 0.3 && c.s < line.length - 0.3) return c.s
+  return dist(line.start, spot) < 1.2 ? 0 : null
 }
 
 export function plan(st: State, phase: Phase, read: Read | undefined, defaultCoverage: Coverage): Plan {
@@ -72,10 +85,14 @@ export function plan(st: State, phase: Phase, read: Read | undefined, defaultCov
   const shotAct = phase.actions.find((a) => a.type === 'shot')
   const passers = new Set(passActs.map((a) => a.from - 1))
 
+  // Chi rimette da fuori campo non entra finché non ha passato la palla.
+  const inbounder = st.holder >= 0 && outOfBounds(st.off[st.holder]) ? st.holder : -1
+
   const moves: (Motion | null)[] = [null, null, null, null, null]
   for (const a of phase.actions) {
     if (a.type !== 'move' && a.type !== 'dribble' && a.type !== 'screen') continue
     const i = a.slot - 1
+    if (i === inbounder && !passers.has(i)) continue
     // Chi ha la palla e si muove senza passarla sta palleggiando.
     const kind: MoveKind = a.type === 'move' && i === st.holder && !passers.has(i) ? 'dribble' : a.type
     const line = new Line(smooth([st.off[i], ...a.path]))
@@ -102,11 +119,29 @@ export function plan(st: State, phase: Phase, read: Read | undefined, defaultCov
       if (A !== h || A === B) continue
       const mA = moves[A]
       const ready = mA && mA.kind === 'dribble' ? Math.max(have, motionEnd(mA)) : have
+      const mB = moves[B]
+
+      if (a.hand && mB) {
+        // Consegnato: la palla passa di mano quando il compagno arriva accanto al passatore.
+        const c = mB.line.closest(offAt(A, ready))
+        if (c.d < 1.6) {
+          const tx = Math.max(ready, mB.t0 + mB.prof.timeAt(c.s))
+          passes.push({ action: a, a: A, b: B, rel: tx, catch: tx + 0.1, p0: offAt(A, tx), p1: offAt(B, tx + 0.1), hand: { ready, s: c.s } })
+          h = B
+          have = tx + 0.1
+          continue
+        }
+      }
+
       // Si aspetta il ricevitore solo se si muove per smarcarsi. Se si muove dopo
       // aver ricevuto (palleggio, o un altro passaggio prima di tagliare) riceve da fermo.
-      const mB = moves[B]
+      // Su un taglio la palla lo anticipa: la riceve in corsa, a un metro dall'arrivo.
       const passesLater = passActs.slice(passActs.indexOf(a) + 1).some((p) => p.from - 1 === B)
-      const arrive = mB && (mB.kind === 'dribble' || passesLater) ? 0 : motionEnd(mB)
+      let arrive = 0
+      if (mB && mB.kind !== 'dribble' && !passesLater) {
+        const L = mB.line.length
+        arrive = mB.kind === 'move' ? mB.t0 + mB.prof.timeAt(L - Math.min(1, 0.3 * L)) : motionEnd(mB)
+      }
       let rel = ready
       let cat = ready
       for (let k = 0; k < 3; k++) {
@@ -125,7 +160,8 @@ export function plan(st: State, phase: Phase, read: Read | undefined, defaultCov
       const spot = m.line.end
       const users: { u: number; tPass: number }[] = []
       for (const n of moves) {
-        if (!n || n.i === m.i) continue
+        // Chi va a bloccare a sua volta non sta usando questo blocco.
+        if (!n || n.i === m.i || n.kind === 'screen') continue
         const s = screenUse(n.line, m)
         if (s !== null) users.push({ u: n.i, tPass: n.t0 + n.prof.timeAt(s) })
       }
@@ -145,13 +181,17 @@ export function plan(st: State, phase: Phase, read: Read | undefined, defaultCov
       const myPass = passes.find((p) => p.a === m.i)
       if (myPass && m.kind !== 'dribble') t0 = myPass.rel + 0.15
       const got = passes.find((p) => p.b === m.i)
-      if (got && m.kind === 'dribble') t0 = Math.max(t0, got.catch + 0.1)
+      if (got && !got.hand && m.kind === 'dribble') t0 = Math.max(t0, got.catch + 0.1)
+      // Nel consegnato chi riceve arriva accanto al passatore quando questo è pronto.
+      if (got?.hand) t0 = Math.max(t0, got.hand.ready + 0.05 - m.prof.timeAt(got.hand.s))
       for (const s of screens) {
-        if (s.j === m.i) continue
+        if (s.j === m.i || m.kind === 'screen') continue
         const at = screenUse(m.line, moves[s.j]!)
         if (at !== null) t0 = Math.max(t0, s.tSet - m.prof.timeAt(at) + 0.15)
       }
-      m.t0 = t0
+      // ponytail: tetto di sicurezza per catene di attese senza senso (A aspetta B che aspetta A);
+      // uno schema vero non ha partenze dopo 20 s nella stessa fase.
+      m.t0 = Math.min(t0, 20)
     }
   }
 
@@ -166,7 +206,7 @@ export function plan(st: State, phase: Phase, read: Read | undefined, defaultCov
   if (shotAct && shotAct.type === 'shot' && shotAct.slot - 1 === lastHolder) {
     const i = lastHolder
     const got = passes.length && passes[passes.length - 1].b === i ? lastCatch : 0
-    const rel = Math.max(got, motionEnd(moves[i])) + 0.25
+    const rel = Math.max(got, motionEnd(moves[i])) + SHOT_GATHER
     shot = { i, rel, land: rel + 1.0, p0: offAt(i, rel) }
   }
 
@@ -191,7 +231,9 @@ export function plan(st: State, phase: Phase, read: Read | undefined, defaultCov
       return { p: BASKET, z: Math.max(0.15, 3.05 - 9 * (t - shot.land) ** 2), holder: -1 }
     }
     const m = moves[holder]
-    const dribbling = m && m.kind === 'dribble' && t >= m.t0 && t <= motionEnd(m)
+    // Chi riceve un consegnato prosegue palleggiando.
+    const fromHand = passes.some((p) => p.hand && p.b === holder && t >= p.catch)
+    const dribbling = m && (m.kind === 'dribble' || fromHand) && t >= m.t0 && t <= motionEnd(m)
     const z = dribbling ? 0.12 + 0.85 * Math.abs(Math.cos((Math.PI * (t - m!.t0)) / 0.5)) : 1.0
     return { p: offAt(holder, t), z, holder }
   }
@@ -276,38 +318,88 @@ export function simulate(st: State, read: Read | undefined, pl: Plan, defense: D
 
       if (!zone) {
         const ballDef = bl.holder >= 0 ? assign.indexOf(bl.holder) : -1
-        const help = driveHelpSpot(scene, ballDef >= 0 ? def[ballDef] : null)
-        if (help) {
-          const ok = (d: number) => d !== ballDef && !fixed[d] && dist(offL[assign[d]], bl.p) > 2.5
-          if (helper < 0 || !ok(helper)) {
-            helper = -1
-            for (let d = 0; d < 5; d++) if (ok(d) && (helper < 0 || dist(def[d], help) < dist(def[helper], help))) helper = d
+        const hm = bl.holder >= 0 ? pl.moves[bl.holder] : null
+        const driving = !!hm && hm.kind === 'dribble' && tl > hm.t0 && tl < motionEnd(hm)
+
+        // Pericolo vicino al canestro: chi penetra palleggiando, oppure chi taglia
+        // (o rolla) verso il ferro avendo battuto il suo difensore.
+        let threat: { at: Vec; who: number; ball: boolean } | null = null
+        const drive = driveHelpSpot(scene, ballDef >= 0 ? def[ballDef] : null, driving)
+        if (drive) threat = { at: drive, who: bl.holder, ball: true }
+        else {
+          for (let a = 0; a < 5; a++) {
+            if (a === bl.holder) continue
+            const da = assign.indexOf(a)
+            const ra = dist(offL[a], BASKET)
+            if (ra > 3.2 || da < 0 || dist(def[da], BASKET) < ra + 0.4) continue
+            if (!threat || ra < dist(threat.at, BASKET))
+              threat = { at: add(offL[a], mul(unit(sub(BASKET, offL[a])), 0.9)), who: a, ball: false }
           }
-          if (helper >= 0) targets[helper] = help
+        }
+
+        if (threat) {
+          // Aiuta chi è sul lato debole ed è più vicino al canestro; si cambia aiuto
+          // solo se un altro è più vicino di almeno un metro, per non saltellare.
+          const free = (d: number) => !fixed[d] && d !== ballDef && assign[d] !== threat!.who
+          const weak = (d: number) => free(d) && weakSide(offL[assign[d]], bl.p)
+          let best = -1
+          for (let d = 0; d < 5; d++) if (weak(d) && (best < 0 || dist(def[d], BASKET) < dist(def[best], BASKET))) best = d
+          // Senza lato debole (palla al centro) aiuta il più vicino tra chi non è a un passaggio.
+          if (best < 0)
+            for (let d = 0; d < 5; d++)
+              if (free(d) && !onePassAway(offL[assign[d]], bl.p) && (best < 0 || dist(def[d], threat.at) < dist(def[best], threat.at))) best = d
+          if (helper < 0 || !free(helper) || (best >= 0 && dist(def[best], BASKET) < dist(def[helper], BASKET) - 1)) helper = best
+          if (helper >= 0) targets[helper] = threat.at
+          // Sulla penetrazione chi è a un passaggio finge l'aiuto senza lasciare il suo uomo.
+          if (threat.ball)
+            for (let d = 0; d < 5; d++)
+              if (d !== helper && free(d) && onePassAway(offL[assign[d]], bl.p)) targets[d] = lerp(targets[d], threat.at, 0.35)
         } else helper = -1
 
         for (const s of pl.screens) {
           for (const us of s.users) {
-            if (t < s.tSet - 0.4 || t > us.tPass + 0.7) continue
+            if (t < s.tSet - 0.4 || t > us.tPass + 1.2) continue
             const scr = off[s.j]
             const dU = assign.indexOf(us.u)
             const dS = assign.indexOf(s.j)
+            const onBall = us.u === bl.holder
+            const near = t <= us.tPass + 0.7
             if (s.coverage === 'sotto') {
-              if (dU >= 0 && crosses(def[dU], targets[dU], scr)) targets[dU] = add(scr, mul(unit(sub(BASKET, scr)), 1.6))
-              if (dS >= 0) targets[dS] = add(targets[dS], mul(unit(sub(BASKET, scr)), 0.9))
+              if (dU >= 0 && near) {
+                if (onBall || t < us.tPass) {
+                  if (crosses(def[dU], targets[dU], scr)) targets[dU] = add(scr, mul(unit(sub(BASKET, scr)), 1.6))
+                } else {
+                  // Lontano dalla palla chi passa sotto anticipa il tagliante sul punto d'arrivo.
+                  const there = pl.offAt(us.u, us.tPass + 0.8)
+                  targets[dU] = add(there, mul(unit(sub(BASKET, there)), 1.0))
+                }
+              }
+              if (dS >= 0 && near) targets[dS] = add(targets[dS], mul(unit(sub(BASKET, scr)), 0.9))
             } else if (s.coverage === 'sopra') {
-              if (dU >= 0 && crosses(def[dU], targets[dU], scr)) {
-                targets[dU] = add(scr, mul(unit(sub(off[us.u], scr)), 0.75))
-                if (dist(def[dU], scr) < 1.1) slow[dU] = 0.6
+              if (dU >= 0 && near) {
+                if (onBall) {
+                  if (crosses(def[dU], targets[dU], scr)) targets[dU] = add(scr, mul(unit(sub(off[us.u], scr)), 0.75))
+                } else targets[dU] = pl.offAt(us.u, Math.max(0, tl - 0.3)) // insegue il tagliante, un passo dietro
+                if (t >= us.tPass && t < us.tPass + 0.4 && dist(def[dU], scr) < 1.1) slow[dU] = 0.6
               }
               // Sul blocco sulla palla il difensore del bloccante esce sulla strada
-              // del palleggiatore per contenerlo, poi recupera sul suo uomo.
-              if (dS >= 0 && us.u === bl.holder && t < us.tPass + 0.5) {
+              // del palleggiatore per contenerlo, e resta finché il compagno non è rientrato.
+              if (dS >= 0 && onBall && dU >= 0 && dist(def[dU], BASKET) > dist(bl.p, BASKET) - 0.3) {
                 const ahead = pl.offAt(us.u, us.tPass + 0.6)
                 targets[dS] = add(scr, add(mul(unit(sub(ahead, scr)), 1.0), mul(unit(sub(BASKET, scr)), 0.2)))
               }
             }
           }
+        }
+      }
+
+      // Dopo il tiro tutti tagliafuori: a uomo sul proprio, a zona sull'attaccante più vicino.
+      if (pl.shot && t >= pl.shot.rel + 0.2) {
+        for (let d = 0; d < 5; d++) {
+          if (fixed[d]) continue
+          let a = assign[d]
+          if (zone) a = offL.reduce((best, q, i) => (dist(q, def[d]) < dist(offL[best], def[d]) ? i : best), 0)
+          targets[d] = boxOut(offL[a])
         }
       }
 
@@ -324,9 +416,10 @@ export function simulate(st: State, read: Read | undefined, pl: Plan, defense: D
         if (dvl > DEF_ACC * DT) dv = mul(dv, (DEF_ACC * DT) / dvl)
         vel[d] = add(vel[d], dv)
         def[d] = add(def[d], mul(vel[d], DT))
-        def[d] = { x: clamp(def[d].x, -0.2, 15.2), y: clamp(def[d].y, 0, 17) }
       }
       separate(def, off, fixed)
+      // Spinti dai compagni restano comunque in campo (un piede fuori al massimo).
+      for (let d = 0; d < 5; d++) if (!fixed[d]) def[d] = { x: clamp(def[d].x, -0.2, 15.2), y: clamp(def[d].y, 0, 17) }
     }
 
     const b = pl.ballAt(t)

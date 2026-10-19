@@ -13,7 +13,8 @@ export type MoveKind = 'move' | 'dribble' | 'screen'
 /** I punti del percorso escludono la partenza: si parte sempre da dove il giocatore si trova. */
 export type Action =
   | { id: string; type: MoveKind; slot: Slot; path: Vec[] }
-  | { id: string; type: 'pass'; from: Slot; to: Slot }
+  /** Con `hand` è un consegnato: la palla passa di mano quando il compagno arriva vicino. */
+  | { id: string; type: 'pass'; from: Slot; to: Slot; hand?: boolean }
   | { id: string; type: 'shot'; slot: Slot }
 
 /**

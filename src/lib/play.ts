@@ -76,5 +76,4 @@ export function mirrored(data: PlayData): PlayData {
   return { ...data, start: { ...data.start, offense: data.start.offense.map(flipV) }, root: phase(data.root) }
 }
 
-/** Fuori dal rettangolo di gioco (chi rimette). */
-export const outOfBounds = (v: Vec) => v.x < 0 || v.x > W || v.y < 0
+export { outOfBounds } from './court'

@@ -3,6 +3,7 @@
   import Board from '../components/Board.svelte'
   import Icon from '../components/Icon.svelte'
   import Phases from '../components/Phases.svelte'
+  import Sign, { type SignKind } from '../components/Sign.svelte'
   import { ApiError } from '../lib/api'
   import { defaultStart } from '../lib/court'
   import { arrowHead, markAt, marks, polyD } from '../lib/draw'
@@ -34,7 +35,7 @@
 
   let choices = $state<number[]>([])
   let current = $state(-1)
-  type Tool = MoveKind | 'pass' | 'shot' | 'defense' | 'arrange' | 'ball'
+  type Tool = MoveKind | 'pass' | 'handoff' | 'shot' | 'defense' | 'arrange' | 'ball'
   let tool = $state<Tool>('arrange')
   let selected = $state<string | null>(null)
   let note = $state('')
@@ -83,7 +84,14 @@
     const h = run.start.holder
     if (h >= 0 && outOfBounds(run.start.off[h]) && run.plan.moves[h] && !run.plan.passes.some((p) => p.a === h))
       list.push(`Il ${h + 1} rimette da fuori: deve passare la palla prima di entrare.`)
+    const first = run.plan.passes[0]
+    if (h >= 0 && outOfBounds(run.start.off[h]) && first && first.rel > 5)
+      list.push(`La rimessa va fatta entro 5 secondi: qui la palla parte dopo ${first.rel.toFixed(1).replace('.', ',')} s.`)
+    for (const a of run.phase.actions)
+      if (a.type === 'pass' && a.hand && !run.plan.passes.find((p) => p.action.id === a.id)?.hand)
+        list.push(`Consegnato: il ${a.to} deve passare accanto al ${a.from} per prendere la palla.`)
     for (const p of run.plan.passes) {
+      if (p.hand) continue
       for (let u = 0.15; u <= 0.86; u += 0.05) {
         const f = frameAt(run, p.rel + u * (p.catch - p.rel))
         const ball = lerp(p.p0, p.p1, u)
@@ -295,8 +303,13 @@
       }
     } else {
       let i = hit(startFrame.off, p)
-      // Per il tiro si può toccare anche dove il giocatore arriva.
-      if (i < 0 && tool === 'shot' && run) i = hit([0, 1, 2, 3, 4].map((j) => run.plan.offAt(j, run.plan.dur)), p)
+      let from = i >= 0 ? startFrame.off[i] : p
+      // Per tiro, passaggio e consegnato si può partire anche da dove il giocatore arriva.
+      if (i < 0 && run && (tool === 'shot' || tool === 'pass' || tool === 'handoff')) {
+        const ends = [0, 1, 2, 3, 4].map((j) => run.plan.offAt(j, run.plan.dur))
+        i = hit(ends, p)
+        if (i >= 0) from = ends[i]
+      }
       if (i >= 0) {
         if (tool === 'shot') {
           if (i !== holderNow) return flash('Tira chi ha la palla.')
@@ -306,11 +319,12 @@
           })
           return
         }
-        if (holderNow < 0 && (tool === 'pass' || tool === 'dribble')) return flash('Dopo il tiro nessuno ha la palla.')
-        if (tool === 'pass' && i !== holderNow) return flash(`La palla ce l'ha il ${holderNow + 1}.`)
+        const passing = tool === 'pass' || tool === 'handoff'
+        if (holderNow < 0 && (passing || tool === 'dribble')) return flash('Dopo il tiro nessuno ha la palla.')
+        if (passing && i !== holderNow) return flash(`La palla ce l'ha il ${holderNow + 1}.`)
         if (tool === 'dribble' && i !== holderNow && i !== run!.start.holder) return flash('Palleggia solo chi ha la palla.')
         if (tool === 'dribble' && i === run!.start.holder && outOfBounds(run!.start.off[i])) return flash('Da fuori campo non si palleggia: prima il passaggio.')
-        draft = { kind: tool, who: i, pts: [startFrame.off[i]], side: 'off' }
+        draft = { kind: tool, who: i, pts: [from], side: 'off' }
         return
       }
     }
@@ -347,7 +361,7 @@
     }
     if (!draft) return
     const last = draft.pts[draft.pts.length - 1]
-    if (draft.kind === 'pass') draft.pts = [draft.pts[0], p]
+    if (draft.kind === 'pass' || draft.kind === 'handoff') draft.pts = [draft.pts[0], p]
     else if (dist(last, p) > 0.12) draft.pts = [...draft.pts, p]
   }
 
@@ -370,14 +384,14 @@
     const pts = simplify(d.pts, 0.18).map((q) => ({ x: round(q.x), y: round(q.y) }))
     const length = new Line(d.pts).length
 
-    if (d.kind === 'pass') {
+    if (d.kind === 'pass' || d.kind === 'handoff') {
       const ends = [0, 1, 2, 3, 4].map((j) => run!.plan.offAt(j, run!.plan.dur))
       let j = hit(ends, p, 1.4)
       if (j < 0 || j === d.who) j = hit(startFrame.off, p, 1.4)
       if (j < 0 || j === d.who) return flash('Rilascia il passaggio su un compagno.')
       change(() => {
         phase.actions = phase.actions.filter((a) => !(a.type === 'pass' && a.from === d.who + 1) && a.type !== 'shot')
-        phase.actions.push({ id: uid(), type: 'pass', from: (d.who + 1) as Slot, to: (j + 1) as Slot })
+        phase.actions.push({ id: uid(), type: 'pass', from: (d.who + 1) as Slot, to: (j + 1) as Slot, ...(d.kind === 'handoff' ? { hand: true } : {}) })
       })
       return
     }
@@ -396,7 +410,7 @@
     selected = null
   }
 
-  const draftD = $derived(draft ? polyD(draft.kind === 'pass' ? draft.pts : smooth(draft.pts)) : null)
+  const draftD = $derived(draft ? polyD(draft.kind === 'pass' || draft.kind === 'handoff' ? draft.pts : smooth(draft.pts)) : null)
 
   function removeSelected() {
     if (!selected || !phase || !read) return
@@ -645,6 +659,7 @@
     { id: 'dribble', label: 'Palleggio' },
     { id: 'screen', label: 'Blocco' },
     { id: 'pass', label: 'Passaggio' },
+    { id: 'handoff', label: 'Consegnato' },
     { id: 'shot', label: 'Tiro' },
     { id: 'defense', label: 'Difesa' },
   ]
@@ -652,7 +667,7 @@
   const hint = $derived.by(() => {
     if (note) return note
     if (current < 0) return tool === 'ball' ? 'Tocca il giocatore che ha la palla all’inizio.' : 'Trascina i giocatori nella posizione di partenza.'
-    if (holderNow < 0 && (tool === 'dribble' || tool === 'pass' || tool === 'shot')) return 'Dopo il tiro nessuno ha la palla.'
+    if (holderNow < 0 && (tool === 'dribble' || tool === 'pass' || tool === 'handoff' || tool === 'shot')) return 'Dopo il tiro nessuno ha la palla.'
     switch (tool) {
       case 'move':
         return 'Trascina da un giocatore fino a dove arriva.'
@@ -662,6 +677,8 @@
         return 'Trascina il bloccante fino al punto del blocco. Chi passa vicino aspetta che sia piazzato.'
       case 'pass':
         return `Trascina dal ${holderNow + 1} fino al compagno. La palla parte quando lui arriva.`
+      case 'handoff':
+        return `Trascina dal ${holderNow + 1} al compagno che gli passa accanto: la palla passa di mano quando arriva.`
       case 'shot':
         return `Tocca il ${holderNow + 1} per farlo tirare.`
       case 'defense':
@@ -734,21 +751,7 @@
       <div class="toolset">
         {#each TOOLS as t}
           <button class="tool" aria-pressed={tool === t.id} onclick={() => ((tool = t.id), (note = ''))}>
-            <svg viewBox="0 0 40 20" aria-hidden="true">
-              {#if t.id === 'move'}
-                <path d="M3 15C12 15 20 6 31 6" /><path d="M36 6l-6-3v6z" class="fill" />
-              {:else if t.id === 'dribble'}
-                <path d="M3 13l3-4 3 4 3-4 3 4 3-4 3 4 3-4 3 4h3" /><path d="M37 13l-6-3v6z" class="fill" />
-              {:else if t.id === 'screen'}
-                <path d="M3 12H31M31 4v16" class="thick" />
-              {:else if t.id === 'pass'}
-                <path d="M3 10H30" stroke-dasharray="4 3" /><path d="M36 10l-6-3v6z" class="fill" />
-              {:else if t.id === 'shot'}
-                <path d="M3 15Q15 0 29 9" stroke-dasharray="1.5 3" /><circle cx="33" cy="11" r="3.5" />
-              {:else}
-                <circle cx="8" cy="10" r="5" class="fill" /><path d="M16 10H31" /><path d="M36 10l-6-3v6z" class="fill" />
-              {/if}
-            </svg>
+            <Sign kind={t.id as SignKind} />
             {t.label}
           </button>
         {/each}
@@ -956,22 +959,6 @@
     background: var(--ink);
     color: #fff;
   }
-  .tool svg {
-    width: 40px;
-    height: 20px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .tool .fill {
-    fill: currentColor;
-    stroke: none;
-  }
-  .tool .thick {
-    stroke-width: 2.6;
-  }
   .right {
     display: flex;
     gap: 6px;
@@ -1009,7 +996,7 @@
   @media (max-width: 520px) {
     .toolset {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       width: 100%;
     }
     .tool {

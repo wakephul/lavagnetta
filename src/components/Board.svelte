@@ -57,7 +57,7 @@
   }: Props = $props()
 
   const OFF_R = 0.45
-  const DEF_R = 0.41
+  const DEF_R = 0.44
 
   let svg: SVGSVGElement
   const view = $derived(viewFor(situation))
@@ -134,9 +134,9 @@
         {#if m.ring}
           <circle cx={m.ring.x} cy={m.ring.y} r="0.42" fill="none" stroke={c} stroke-width={w} stroke-dasharray="0.05 0.13" stroke-linecap="round" />
         {/if}
-        {#if m.bar}
-          <line x1={m.bar[0].x} y1={m.bar[0].y} x2={m.bar[1].x} y2={m.bar[1].y} stroke={c} stroke-width={w * 1.9} stroke-linecap="round" />
-        {/if}
+        {#each m.bars ?? [] as b}
+          <line x1={b[0].x} y1={b[0].y} x2={b[1].x} y2={b[1].y} stroke={c} stroke-width={m.kind === 'handoff' ? w * 1.4 : w * 1.9} stroke-linecap="round" />
+        {/each}
       </g>
     {/each}
   </g>
@@ -160,7 +160,7 @@
         {/if}
         <path d="M{DEF_R + 0.33} 0L{DEF_R + 0.1} -0.17L{DEF_R + 0.1} 0.17Z" fill="var(--def)" transform="rotate({facing(p)})" />
         <circle r={DEF_R} fill="var(--def)" />
-        <text class="num" fill="#fff" font-size="0.46">{i + 1}</text>
+        <text class="num" fill="#fff" font-size="0.4">X{i + 1}</text>
       </g>
     {/each}
   {/if}

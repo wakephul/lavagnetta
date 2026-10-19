@@ -16,8 +16,9 @@ export const THREE_SIDE = 0.9
 /** Dove l'arco da tre incontra i tratti dritti vicino al fondo. */
 export const THREE_Y = BASKET.y + Math.sqrt(THREE_R ** 2 - (BASKET.x - THREE_SIDE) ** 2)
 export const NO_CHARGE_R = 1.25
-/** Linea di rimessa sulla laterale, a 8,325 m dal fondo. */
-export const THROW_IN_Y = 8.325
+
+/** Fuori dal rettangolo di gioco (chi rimette). */
+export const outOfBounds = (v: Vec) => v.x < 0 || v.x > W || v.y < 0
 
 export type View = { x: number; y: number; w: number; h: number }
 
@@ -52,8 +53,8 @@ export function defaultStart(s: Situation): { offense: Vec[]; ball: 1 | 2 | 3 | 
   return {
     offense: [
       { x: 7.5, y: 8.4 },
-      { x: 12.6, y: 5.6 },
-      { x: 2.4, y: 5.6 },
+      { x: 12.9, y: 5.9 },
+      { x: 2.1, y: 5.9 },
       { x: 5.1, y: 5.8 },
       { x: 9.9, y: 2.3 },
     ],

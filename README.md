@@ -4,13 +4,16 @@ Schemi di basket da disegnare, rivedere e provare, anche dal telefono. È nata p
 
 ## Cosa fa
 
-- **Lavagna 2D vista dall'alto**, con i segni classici: taglio, palleggio a zig-zag, blocco con la barra, passaggio tratteggiato, tiro.
+- **Lavagna 2D vista dall'alto**, con i segni classici: taglio, palleggio a zig-zag, blocco con la barra, passaggio tratteggiato, consegnato con la doppia barretta, tiro. I difensori sono X1-X5. La fine di un movimento si ritocca trascinandola.
 - **Vista 3D** a richiesta, con quattro inquadrature e rotazione libera.
 - **Difesa che si muove da sola**: a uomo, zona 2-3 o zona 3-2. L'allenatore corregge a mano solo i difensori che vuole.
 - **Letture**: una fase può avere più seguiti a seconda di cosa fa la difesa (passa sopra, passa sotto, cambia, o un movimento disegnato). Chi guarda sceglie la lettura e vede la variante.
-- **Metà campo, rimessa da fondo e rimessa laterale.**
+- **Metà campo, rimessa da fondo e rimessa laterale.** Chi rimette non palleggia e non entra prima di aver passato; l'editor avvisa se la rimessa supera i 5 secondi.
+- **Avvisi nell'editor** sui passaggi con un difensore sulla linea.
+- **Dall'altro lato**: lo stesso schema si guarda ribaltato, senza ridisegnarlo.
 - **Chi sei?** Ogni ragazzo sceglie il suo numero: il suo percorso resta evidenziato, gli altri diventano grigi.
-- **Mettiti alla prova**: lo schema si ferma e chiede "dove vai?" o "a chi passi?". Si risponde toccando il campo; alle letture la difesa sceglie a caso.
+- **Mettiti alla prova**: lo schema si ferma e chiede "dove vai?", "a chi passi?" o se tirare. Si risponde toccando il campo; alle letture la difesa sceglie a caso.
+- **Legenda** dei segni, per chi non li conosce ancora.
 - **Quintetto**: si assegnano i nomi della rosa ai numeri 1-5, e i nomi compaiono sotto le pedine.
 - **Link condivisibile** per ogni schema, in sola lettura, senza password. L'allenatore può crearne uno nuovo e il vecchio smette di funzionare.
 
@@ -18,12 +21,16 @@ Schemi di basket da disegnare, rivedere e provare, anche dal telefono. È nata p
 
 La simulazione calcola 30 fotogrammi al secondo ed è deterministica: con gli stessi dati dà sempre lo stesso risultato, quindi si può andare avanti e indietro.
 
-**A uomo.** Chi marca la palla sta a un metro dal palleggiatore, tra lui e il canestro. A un passaggio di distanza si sta sulla linea di passaggio, un passo verso il canestro; sul post si anticipa di tre quarti. Sul lato debole ci si stacca nel triangolo palla-uomo-canestro, ma non oltre tre metri. Se il palleggiatore batte il suo difensore vicino al canestro, il compagno più vicino tra quelli lontani dalla palla va in aiuto.
+**A uomo.** Chi marca la palla sta a un metro dal palleggiatore, tra lui e il canestro. A un passaggio di distanza si sta sulla linea di passaggio, un passo verso il canestro; sul post si anticipa di tre quarti. Sul lato debole ci si stacca sulla linea d'aiuto, fino a 4,5 m dal proprio uomo. Chi è lontano ma sul lato della palla, come l'angolo forte, non si lascia: al massimo due metri. Con la palla fuori campo per una rimessa si negano tutti i passaggi vicini.
 
-**Sui blocchi.** Chi usa il blocco parte in tempo per arrivarci appena è piazzato. Il difensore che lo segue lo affronta come indicato nello schema o nella lettura:
+**Aiuti.** Quando il palleggiatore entra nei 4 m dal canestro, o lo batte il suo difensore, aiuta il difensore del lato debole più vicino al ferro. Chi è a un passaggio finge l'aiuto e resta sul suo uomo. Anche chi taglia o rolla libero verso il canestro viene preso da un aiuto. Dopo il tiro tutti tagliafuori.
 
-- *passa sopra*: insegue tra bloccante e attaccante e perde un po' di velocità nel contatto; sul blocco sulla palla il difensore del bloccante esce a contenere e poi rientra;
-- *passa sotto*: passa dal lato del canestro, mentre il difensore del bloccante fa un passo indietro per lasciarlo passare;
+**Tempi dell'attacco.** Chi usa il blocco parte in tempo per arrivarci appena è piazzato. Il passaggio parte quando il compagno arriva; su un taglio lo anticipa e il compagno riceve in corsa, a un metro dall'arrivo. Chi passa e poi taglia parte dopo il passaggio. Dalla ricezione al tiro passa mezzo secondo.
+
+**Sui blocchi.** Il difensore di chi usa il blocco lo affronta come indicato nello schema o nella lettura:
+
+- *passa sopra*: insegue tra bloccante e attaccante e perde un po' di velocità nel contatto; sul blocco sulla palla il difensore del bloccante esce a contenere e rientra quando il compagno ha recuperato;
+- *passa sotto*: passa dal lato del canestro, mentre il difensore del bloccante fa un passo indietro per lasciarlo passare; lontano dalla palla anticipa il tagliante sul punto d'arrivo;
 - *cambia*: i due difensori si scambiano l'uomo nel momento in cui l'attaccante supera il bloccante.
 
 Nessun difensore attraversa un altro giocatore. Reagiscono con due decimi di secondo di ritardo, come in campo.
@@ -31,6 +38,8 @@ Nessun difensore attraversa un altro giocatore. Reagiscono con due decimi di sec
 **A zona.** Per la 2-3 e la 3-2 ci sono posizioni di riferimento con la palla in punta, in ala, in angolo, in post alto e in post basso. Per gli altri punti si interpola. Il difensore più vicino esce sulla palla e gli altri si stringono un po' sugli attaccanti che entrano nella loro zona.
 
 Sono le regole che si insegnano in palestra. Dove la difesa vera fa altro, l'allenatore la corregge a mano o crea una lettura.
+
+**Cosa non fa.** Non c'è la rotazione dietro a chi aiuta, e i passaggi non vengono mai intercettati (l'editor però segnala quelli a rischio). Non c'è il campo intero: niente pressing né contropiede.
 
 ## Usarla per la tua squadra
 

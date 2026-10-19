@@ -1,4 +1,4 @@
-import { BASKET, HALF, W } from './court'
+import { BASKET, HALF, W, outOfBounds } from './court'
 import { add, clamp, dist, lerp, mul, sub, unit, type Vec } from './geo'
 import type { DefenseType } from './types'
 
@@ -22,39 +22,60 @@ export function onBall(ball: Vec): Vec {
   return inCourt(add(ball, mul(unit(sub(H, ball)), Math.min(1.0, dist(ball, H) * 0.5))))
 }
 
+/** Stesso lato della palla. Chi sta al centro è sempre sul lato forte; con la palla fuori campo, tutti. */
+function sameSide(m: Vec, b: Vec) {
+  if (outOfBounds(b)) return true
+  return Math.abs(b.x - W / 2) < 2 || Math.abs(m.x - W / 2) < 2 || Math.sign(b.x - W / 2) === Math.sign(m.x - W / 2)
+}
+
+/** A un passaggio dalla palla: il suo difensore deve negare, non aiutare. */
+export const onePassAway = (m: Vec, b: Vec) => sameSide(m, b) && dist(m, b) < 7
+
+/** Lato debole: da qui viene l'aiuto lungo. */
+export const weakSide = (m: Vec, b: Vec) => !sameSide(m, b)
+
 /** Difesa a uomo: posto del difensore che marca l'attaccante m. */
 export function manSpot(m: Vec, s: Scene, hasBall: boolean): Vec {
   if (hasBall) return onBall(m)
   const b = s.ball
   const toBall = unit(sub(b, m))
   const toRim = unit(sub(H, m))
-  const sameSide = Math.abs(b.x - W / 2) < 2 || Math.sign(b.x - W / 2) === Math.sign(m.x - W / 2)
-  const near = dist(m, b) < 7
-  if (dist(m, H) < 3.2 && sameSide) {
+  const near = onePassAway(m, b)
+  if (dist(m, H) < 3.2 && sameSide(m, b)) {
     // Post sul lato della palla: anticipo di tre quarti.
     return inCourt(add(m, add(mul(toBall, 0.6), mul(toRim, 0.2))))
   }
-  if (near && sameSide) {
+  if (near) {
     // Un passaggio di distanza: sulla linea di passaggio, un passo verso il canestro.
     // Se l'uomo è vicinissimo alla palla si resta più attaccati a lui.
     const k = Math.min(1, dist(m, b) / 3)
     return inCourt(add(m, add(mul(toBall, 0.9 * k), mul(toRim, 0.45))))
   }
-  // Lato debole: nel triangolo palla-uomo-canestro, pronto ad aiutare,
-  // ma mai a più di tre metri dal proprio uomo.
-  const off = add(mul(sub(b, m), 0.33), mul(sub(H, m), 0.38))
+  // Lato debole: sulla linea d'aiuto, nel triangolo palla-uomo-canestro, fino a 4,5 m
+  // dal proprio uomo. Chi è lontano ma sul lato della palla (l'angolo forte) non si
+  // lascia: ci si stacca al massimo di 2 m.
+  const off = add(mul(sub(b, m), 0.25), mul(sub(H, m), 0.55))
   const l = Math.hypot(off.x, off.y)
-  return inCourt(add(m, l > 3 ? mul(off, 3 / l) : off))
+  const cap = weakSide(m, b) ? 4.5 : 2
+  return inCourt(add(m, l > cap ? mul(off, cap / l) : off))
 }
 
-/** Penetrazione: la palla è vicina al canestro e il suo difensore è stato battuto. */
-export function driveHelpSpot(s: Scene, ballDefender: Vec | null): Vec | null {
+/**
+ * Penetrazione: serve aiuto se chi palleggia entra nei 4 m dal canestro,
+ * oppure se a meno di 5,5 m ha battuto il suo difensore.
+ */
+export function driveHelpSpot(s: Scene, ballDefender: Vec | null, driving: boolean): Vec | null {
   if (s.holder < 0) return null
   const b = s.ball
-  if (b.y < 0 || dist(b, H) > 5.5) return null
-  if (ballDefender && dist(ballDefender, H) < dist(b, H) + 0.1) return null
+  if (outOfBounds(b)) return null
+  const d = dist(b, H)
+  const beaten = !!ballDefender && dist(ballDefender, H) > d + 0.1
+  if (!(beaten && d < 5.5) && !(driving && d < 4)) return null
   return inCourt(add(b, mul(unit(sub(H, b)), 1.0)))
 }
+
+/** Tagliafuori dopo il tiro: tra l'uomo e il canestro, a contatto. */
+export const boxOut = (m: Vec): Vec => inCourt(add(m, mul(unit(sub(H, m)), 0.75)))
 
 // --- Zone ---
 // Posizioni di riferimento per palla in punta, ala, angolo, post alto e post basso
@@ -69,7 +90,7 @@ const Z23: Spot[] = [
   { ball: p(7.5, 8.2), at: [p(5.9, 6.6), p(9.1, 6.6), p(3.9, 2.7), p(11.1, 2.7), p(7.5, 2.4)] },
   { ball: p(2.8, 6.4), at: [p(3.8, 5.5), p(7.2, 5.9), p(2.4, 3.1), p(8.9, 2.3), p(5.6, 2.4)] },
   { ball: p(0.9, 1.3), at: [p(3.4, 4.9), p(7.0, 4.7), p(1.8, 2.0), p(8.3, 2.2), p(4.6, 1.8)] },
-  { ball: p(7.5, 5.8), at: [p(6.2, 6.5), p(8.8, 6.5), p(5.0, 2.5), p(10.0, 2.5), p(7.5, 4.4)] },
+  { ball: p(7.5, 5.8), at: [p(6.2, 6.5), p(8.8, 6.5), p(6.0, 2.0), p(9.0, 2.0), p(7.5, 4.4)] },
   { ball: p(5.0, 2.0), at: [p(4.5, 5.0), p(7.5, 4.9), p(4.1, 2.8), p(8.6, 2.2), p(5.8, 2.2)] },
 ]
 

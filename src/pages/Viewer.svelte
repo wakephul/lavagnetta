@@ -3,6 +3,7 @@
   import Board from '../components/Board.svelte'
   import Icon from '../components/Icon.svelte'
   import Phases from '../components/Phases.svelte'
+  import Sign from '../components/Sign.svelte'
   import { marks, type Mark } from '../lib/draw'
   import { inkOn } from '../lib/color'
   import { BASKET } from '../lib/court'
@@ -481,6 +482,20 @@
         </div>
       </div>
 
+      <details class="legend">
+        <summary>Legenda</summary>
+        <ul>
+          <li><Sign kind="move" /> Taglio</li>
+          <li><Sign kind="dribble" /> Palleggio</li>
+          <li><Sign kind="screen" /> Blocco</li>
+          <li><Sign kind="pass" /> Passaggio</li>
+          <li><Sign kind="handoff" /> Consegnato</li>
+          <li><Sign kind="shot" /> Tiro</li>
+          <li><Sign kind="defense" /> Difensore, con il movimento corretto dall'allenatore</li>
+        </ul>
+        <p class="small muted">I difensori sono le pedine scure: X1 marca il 1, X2 il 2 e così via, finché non c'è un cambio. La punta indica dove guardano.</p>
+      </details>
+
       {#if data.notes}
         <div class="notes">
           <h2>Note</h2>
@@ -590,6 +605,23 @@
     font-size: 0.82rem;
     font-weight: 700;
     flex: none;
+  }
+  .legend ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 6px 14px;
+    margin: 8px 0;
+    padding: 0;
+    list-style: none;
+  }
+  .legend li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.92rem;
+  }
+  .legend p {
+    margin: 0;
   }
   details summary {
     cursor: pointer;

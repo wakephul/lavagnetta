@@ -43,12 +43,13 @@ export function zigzag(line: Line, amp = 0.17, wave = 0.6, straightEnd = 0.7): V
 
 export type Mark = {
   id: string
-  kind: MoveKind | 'pass' | 'shot'
+  kind: MoveKind | 'pass' | 'handoff' | 'shot'
   /** Chi la esegue (indice 0-4). */
   who: number
   d: string
   head?: string
-  bar?: [Vec, Vec]
+  /** Barre perpendicolari: una per il blocco, due per il consegnato. */
+  bars?: [Vec, Vec][]
   /** Il tiro segna anche il ferro, così si vede pure sugli appoggi. */
   ring?: Vec
   /** Linea di riferimento, per toccarla e selezionarla. */
@@ -65,7 +66,7 @@ export function marks(plan: Plan, actions: Action[]): Mark[] {
     if (m.kind === 'screen') {
       const e = m.line.end
       const side = mul(perp(dir), 0.5)
-      out.push({ ...base, d: polyD(m.line.pts), bar: [add(e, side), sub(e, side)] })
+      out.push({ ...base, d: polyD(m.line.pts), bars: [[add(e, side), sub(e, side)]] })
     } else if (m.kind === 'dribble') {
       out.push({ ...base, d: polyD(zigzag(m.line)), head: arrowHead(m.line.end, dir) })
     } else {
@@ -73,6 +74,19 @@ export function marks(plan: Plan, actions: Action[]): Mark[] {
     }
   }
   for (const p of plan.passes) {
+    if (p.hand) {
+      // Consegnato: due barrette dove la palla passa di mano, di traverso alla corsa di chi riceve.
+      const mb = plan.moves[p.b]!
+      const at = mb.line.at(p.hand.s)
+      const dir = unit(sub(mb.line.at(p.hand.s + 0.3), mb.line.at(p.hand.s - 0.3)))
+      const side = mul(perp(dir), 0.38)
+      const bars = [-0.12, 0.12].map((k): [Vec, Vec] => {
+        const c = add(at, mul(dir, k))
+        return [add(c, side), sub(c, side)]
+      })
+      out.push({ id: p.action.id, kind: 'handoff', who: p.a, d: '', bars, line: new Line([at, at]) })
+      continue
+    }
     const line = new Line([p.p0, p.p1])
     const pts = trim(line, 0.5, 0.6)
     out.push({ id: p.action.id, kind: 'pass', who: p.a, d: polyD(pts), head: arrowHead(pts[1], unit(sub(p.p1, p.p0))), line })

@@ -140,3 +140,84 @@ describe('ribaltare', async () => {
     a.def.forEach((p, i) => expect(Math.abs(15 - p.x - b.def[i].x) + Math.abs(p.y - b.def[i].y)).toBeLessThan(0.05))
   })
 })
+
+describe('come se lo aspetta un allenatore', () => {
+  const pass = (from: number, to: number, hand = false): Action => ({ id: `p${from}${to}`, type: 'pass', from: from as 1, to: to as 1, hand })
+  const mv = (id: string, type: 'move' | 'dribble' | 'screen', slot: number, ...pts: [number, number][]): Action => ({
+    id,
+    type,
+    slot: slot as 1,
+    path: pts.map(([x, y]) => ({ x, y })),
+  })
+  const end = (m: { t0: number; prof: { dur: number } } | null) => (m ? m.t0 + m.prof.dur : 0)
+
+  it('sulla penetrazione aiuta il lato debole', () => {
+    const runs = runPath(play([[pass(1, 2)], [mv('d', 'dribble', 2, [10.6, 3.6], [8.9, 2.2])]]), [])
+    const helped = runs[1].frames.some((f) => dist(f.ball, BASKET) < 3 && [2, 3].some((d) => dist(f.def[d], f.ball) < 1.6))
+    expect(helped).toBe(true)
+  })
+
+  it('chi sta al centro del campo viene negato, non lasciato', () => {
+    const [run] = runPath(play([[pass(1, 2)]]), [])
+    expect(dist(run.end.def[0], run.end.off[0])).toBeLessThan(1.7)
+  })
+
+  it('lontano dalla palla "sopra" e "sotto" sono due difese diverse', () => {
+    const data = play([[mv('s', 'screen', 4, [4.2, 3.4]), mv('c', 'move', 3, [3.4, 3.0], [2.2, 5.9])]])
+    data.start.offense[2] = { x: 4.6, y: 1.6 }
+    const at = (cov: Coverage) => {
+      const [run] = runPath({ ...data, coverage: cov }, [])
+      const us = run.plan.screens[0].users.find((u) => u.u === 2)!
+      return run.frames[Math.round((us.tPass + 0.8) / (1 / 30))].def[2]
+    }
+    expect(dist(at('sopra'), at('sotto'))).toBeGreaterThan(0.6)
+  })
+
+  it('chi va a bloccare non usa il blocco del compagno', () => {
+    const [run] = runPath(play([[mv('a', 'screen', 4, [4.0, 4.0]), mv('b', 'screen', 5, [5.0, 3.2], [3.6, 2.4])]]), [])
+    expect(run.plan.screens.flatMap((s) => s.users.map((u) => u.u))).not.toContain(4)
+  })
+
+  it('nel consegnato la palla passa di mano, senza volare', () => {
+    const [run] = runPath(
+      play([[mv('d', 'dribble', 1, [10.4, 7.8]), mv('c', 'move', 2, [11.2, 7.2], [9.6, 8.6]), pass(1, 2, true)]]),
+      [],
+    )
+    const p = run.plan.passes[0]
+    expect(p.hand).toBeDefined()
+    expect(dist(p.p0, p.p1)).toBeLessThan(1.2)
+    expect(p.rel).toBeGreaterThanOrEqual(end(run.plan.moves[0]) - 0.01)
+    expect(run.plan.ballAt(p.catch + 0.3).z).not.toBe(1)
+  })
+
+  it('un consegnato a chi palleggia già non fa crescere i tempi a ogni giro', () => {
+    const [run] = runPath(play([[mv('d', 'dribble', 1, [10.4, 7.8]), mv('c', 'dribble', 2, [11.2, 7.2], [9.6, 8.6]), pass(1, 2, true)]]), [])
+    expect(run.plan.dur).toBeLessThan(8)
+  })
+
+  it('sul taglio la palla anticipa chi riceve, che la prende in corsa', () => {
+    const [run] = runPath(play([[mv('b', 'move', 2, [11.5, 4.0], [9.0, 2.0]), pass(1, 2)]]), [])
+    expect(run.plan.passes[0].catch).toBeLessThan(end(run.plan.moves[1]) - 0.1)
+  })
+
+  it('chi rimette non entra in campo prima di aver passato', () => {
+    const data = play([[mv('m', 'move', 3, [4.6, 1.0])]])
+    data.situation = 'blob'
+    data.start = defaultStart('blob')
+    const [run] = runPath(data, [])
+    expect(run.plan.moves[2]).toBeNull()
+    expect(run.end.off[2]).toEqual(data.start.offense[2])
+  })
+
+  it('sulla rimessa da fondo si negano i passaggi vicini', () => {
+    const data = play([])
+    data.start = defaultStart('blob')
+    const st = initState(data)
+    expect(dist(st.def[1], st.off[1])).toBeLessThan(1.6)
+  })
+
+  it('dopo il tiro si tagliafuori', () => {
+    const [run] = runPath(play([[{ id: 't', type: 'shot', slot: 1 }]]), [])
+    for (let d = 0; d < 5; d++) expect(dist(run.end.def[d], BASKET)).toBeLessThan(dist(run.end.off[run.end.assign[d]], BASKET))
+  })
+})

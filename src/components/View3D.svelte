@@ -108,7 +108,7 @@
     head.position.y = 1.53
     head.castShadow = true
     g.add(head)
-    const num = textSprite(String(n), 0.42, side === 'off' ? inkOn(color) : '#fff', side === 'off' ? color : css('--def'))
+    const num = textSprite(side === 'off' ? String(n) : `X${n}`, 0.42, side === 'off' ? inkOn(color) : '#fff', side === 'off' ? color : css('--def'))
     num.position.y = 2.15
     g.add(num)
     return g
