@@ -8,7 +8,7 @@
   import { inkOn } from '../lib/color'
   import { BASKET } from '../lib/court'
   import { dist, type Vec } from '../lib/geo'
-  import { mirrored, phasesAlong } from '../lib/play'
+  import { mirrored, phasesAlong, swapsRoles } from '../lib/play'
   import { frameAt, initState, runPath, stateFrame, type PhaseRun } from '../lib/sim'
   import { app, canEdit, setLineup, shareUrl } from '../lib/store.svelte'
   import { DEFENSE_NAMES, ROLE_NAMES, SLOTS, type DefenseType, type PlayData } from '../lib/types'
@@ -480,6 +480,7 @@
           <button aria-pressed={!flip} onclick={() => ((flip = false), goPhase(0))}>Come disegnato</button>
           <button aria-pressed={flip} onclick={() => ((flip = true), goPhase(0))}>Dall'altro lato</button>
         </div>
+        {#if flip && swapsRoles(data)}<p class="small muted">Dall'altro lato il 3 fa quello che fa il 2, il 5 quello del 4.</p>{/if}
       </div>
 
       <details class="legend">

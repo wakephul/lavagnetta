@@ -135,9 +135,13 @@ describe('ribaltare', async () => {
   it('ribaltato due volte torna uguale, e la difesa si specchia', () => {
     const data = play([[{ id: 'a', type: 'pass', from: 1, to: 2 }, { id: 'b', type: 'move', slot: 3, path: [{ x: 4, y: 2 }] }]])
     expect(mirrored(mirrored(data))).toEqual(data)
+    // Partenza simmetrica: dall'altro lato il 3 fa il 2 e il 5 fa il 4, con i loro difensori.
+    const roles = [0, 2, 1, 4, 3]
     const a = runPath(data, [])[0].end
     const b = runPath(mirrored(data), [])[0].end
-    a.def.forEach((p, i) => expect(Math.abs(15 - p.x - b.def[i].x) + Math.abs(p.y - b.def[i].y)).toBeLessThan(0.05))
+    a.def.forEach((p, i) => expect(Math.abs(15 - p.x - b.def[roles[i]].x) + Math.abs(p.y - b.def[roles[i]].y)).toBeLessThan(0.05))
+    a.off.forEach((p, i) => expect(Math.abs(15 - p.x - b.off[roles[i]].x)).toBeLessThan(0.01))
+    expect(mirrored(data).root!.actions[0]).toMatchObject({ type: 'pass', from: 1, to: 3 })
   })
 })
 
