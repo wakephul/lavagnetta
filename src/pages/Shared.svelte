@@ -6,7 +6,7 @@
 
   let { share }: { share: string } = $props()
 
-  let result = $state<{ name: string; data: PlayData; color: string } | null>(null)
+  let result = $state<{ name: string; data: PlayData; color: string; color2: string } | null>(null)
   let error = $state('')
 
   $effect(() => {
@@ -17,7 +17,7 @@
       .then((r) => {
         if (!r) error = 'Questo link non è valido, oppure l’allenatore ne ha creato uno nuovo.'
         else {
-          result = { name: r.name, data: r.data, color: r.team.color }
+          result = { name: r.name, data: r.data, color: r.team.color, color2: r.team.color2 }
           document.title = `${r.name} · ${r.team.name}`
         }
       })
@@ -26,7 +26,7 @@
 </script>
 
 {#if result}
-  <div style="--accent: {result.color}; --accent-ink: {inkOn(result.color)}">
+  <div style="--accent: {result.color}; --accent-ink: {inkOn(result.color)}; --team2: {result.color2}">
     <Viewer name={result.name} data={result.data} color={result.color} shared />
   </div>
 {:else if error}

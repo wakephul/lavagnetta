@@ -9,7 +9,7 @@
   const strokes = { line: 'var(--line)', ink: 'var(--ink)', rim: 'var(--rim)' }
 </script>
 
-<g class="court" style="--paint: color-mix(in srgb, {color} 17%, var(--floor))">
+<g class="court" style="--paint: color-mix(in srgb, var(--team2, {color}) 17%, var(--floor))">
   {#each shapes as s}
     <path
       d={s.d}

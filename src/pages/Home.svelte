@@ -57,8 +57,9 @@
 
 <div class="page">
   <header class="bar">
+    <img class="logo" src="./logo.webp" alt="" width="36" height="36" onerror={(e) => ((e.currentTarget as HTMLImageElement).hidden = true)} />
     <h1>{app.data?.team.name ?? ''}</h1>
-    <a class="btn quiet" href="#/squadra"><Icon name="team" /> Squadra</a>
+    <a class="btn quiet" href="#/squadra" aria-label="Squadra"><Icon name="team" /><span class="label">Squadra</span></a>
     {#if canEdit()}
       <a class="btn quiet icon" href="#/impostazioni" aria-label="Impostazioni" title="Impostazioni"><Icon name="gear" /></a>
     {:else}
@@ -126,6 +127,14 @@
 </dialog>
 
 <style>
+  .logo {
+    flex: none;
+  }
+  @media (max-width: 420px) {
+    .label {
+      display: none;
+    }
+  }
   .plays {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 14px;

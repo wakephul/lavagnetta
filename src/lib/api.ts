@@ -39,7 +39,8 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
 }
 
 export type Role = 'view' | 'edit'
-export type TeamData = { role: Role; team: { name: string; color: string }; players: Player[]; plays: Play[] }
+export type Team = { name: string; color: string; color2: string }
+export type TeamData = { role: Role; team: Team; players: Player[]; plays: Play[] }
 
 export const api = {
   login: (password: string) => rpc<{ token: string; role: Role; error?: string }>('login', { p_password: password }),
@@ -56,7 +57,7 @@ export const api = {
   deletePlay: (token: string, id: string) => rpc<void>('delete_play', { p_token: token, p_id: id }),
   newShareLink: (token: string, id: string) => rpc<string>('new_share_link', { p_token: token, p_id: id }),
   sharedPlay: (share: string) =>
-    rpc<{ name: string; data: PlayData; updated_at: string; team: { name: string; color: string } } | null>('shared_play', {
+    rpc<{ name: string; data: PlayData; updated_at: string; team: Team } | null>('shared_play', {
       p_share: share,
     }),
   savePlayer: (token: string, p: Omit<Player, 'id'> & { id: string | null }) =>
@@ -69,7 +70,8 @@ export const api = {
       p_height: p.height,
     }),
   deletePlayer: (token: string, id: string) => rpc<void>('delete_player', { p_token: token, p_id: id }),
-  setTeam: (token: string, name: string, color: string) => rpc<void>('set_team', { p_token: token, p_name: name, p_color: color }),
+  setTeam: (token: string, name: string, color: string, color2: string) =>
+    rpc<void>('set_team', { p_token: token, p_name: name, p_color: color, p_color2: color2 }),
   setPassword: (token: string, kind: Role, password: string) =>
     rpc<void>('set_password', { p_token: token, p_kind: kind, p_password: password }),
 }

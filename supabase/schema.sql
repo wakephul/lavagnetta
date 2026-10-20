@@ -12,6 +12,8 @@ create table if not exists team (
   edit_hash text
 );
 insert into team (id) values (1) on conflict do nothing;
+-- Secondo colore della squadra: area dipinta e chi sei.
+alter table team add column if not exists color2 text not null default '#e8601c' check (color2 ~ '^#[0-9a-fA-F]{6}$');
 
 create table if not exists sessions (
   token uuid primary key default gen_random_uuid(),
@@ -121,7 +123,7 @@ declare r text := session_role(p_token);
 begin
   return json_build_object(
     'role', r,
-    'team', (select json_build_object('name', name, 'color', color) from team where id = 1),
+    'team', (select json_build_object('name', name, 'color', color, 'color2', color2) from team where id = 1),
     'players', coalesce((select json_agg(json_build_object('id', id, 'name', name, 'number', number, 'role', role, 'height', height)
                            order by number nulls last, name) from players), '[]'::json),
     'plays', coalesce((select json_agg(json_build_object('id', id, 'name', name, 'updated_at', updated_at, 'data', data,
@@ -172,7 +174,7 @@ end $$;
 create or replace function shared_play(p_share uuid) returns json
 language sql security definer set search_path = public as $$
   select json_build_object('name', p.name, 'data', p.data, 'updated_at', p.updated_at,
-                           'team', json_build_object('name', t.name, 'color', t.color))
+                           'team', json_build_object('name', t.name, 'color', t.color, 'color2', t.color2))
     from plays p, team t where p.share_token = p_share and t.id = 1;
 $$;
 
@@ -196,11 +198,12 @@ begin
   delete from players where id = p_id;
 end $$;
 
-create or replace function set_team(p_token uuid, p_name text, p_color text) returns void
+drop function if exists set_team(uuid, text, text);
+create or replace function set_team(p_token uuid, p_name text, p_color text, p_color2 text) returns void
 language plpgsql security definer set search_path = public as $$
 begin
   perform require_edit(p_token);
-  update team set name = trim(p_name), color = p_color where id = 1;
+  update team set name = trim(p_name), color = p_color, color2 = p_color2 where id = 1;
 end $$;
 
 -- Cambia una delle due password e chiude le sessioni aperte con quella vecchia.
@@ -232,5 +235,5 @@ create or replace function ping() returns int language sql as $$ select 1 $$;
 
 grant execute on function login(text), logout(uuid), team_data(uuid), save_play(uuid, uuid, text, jsonb, timestamptz),
   delete_play(uuid, uuid), new_share_link(uuid, uuid), shared_play(uuid),
-  save_player(uuid, uuid, text, int, int, int), delete_player(uuid, uuid), set_team(uuid, text, text),
+  save_player(uuid, uuid, text, int, int, int), delete_player(uuid, uuid), set_team(uuid, text, text, text),
   set_password(uuid, text, text), ping() to anon;

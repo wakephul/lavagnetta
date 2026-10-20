@@ -28,7 +28,8 @@
   let floorTex: THREE.CanvasTexture | null = null
   let ready = $state(false)
 
-  const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  // Legge i colori dal tema, compreso il secondo colore della squadra impostato sulla pagina.
+  const css = (name: string) => getComputedStyle(host ?? document.documentElement).getPropertyValue(name).trim()
 
   function mix(a: string, b: string, k: number) {
     const ca = new THREE.Color(a)
@@ -44,7 +45,7 @@
     g.scale(PX, PX)
     g.translate(-v.x, -v.y)
     const floor = css('--floor')
-    const fills = { floor, out: css('--floor-out'), paint: mix(color, floor, 0.17) }
+    const fills = { floor, out: css('--floor-out'), paint: mix(css('--team2') || color, floor, 0.17) }
     const strokes = { line: css('--line'), ink: css('--ink'), rim: css('--rim') }
     g.lineCap = 'round'
     // Ferro e tabellone esistono già in 3D: sul pavimento non vanno disegnati.
@@ -108,7 +109,7 @@
     head.position.y = 1.53
     head.castShadow = true
     g.add(head)
-    const num = textSprite(side === 'off' ? String(n) : `X${n}`, 0.42, side === 'off' ? inkOn(color) : '#fff', side === 'off' ? color : css('--def'))
+    const num = textSprite(side === 'off' ? String(n) : `X${n}`, 0.42, side === 'off' ? inkOn(color) : css('--def-ink'), side === 'off' ? color : css('--def'))
     num.position.y = 2.15
     g.add(num)
     return g
@@ -213,7 +214,7 @@
     for (const g of [...off, ...def]) scene.add(g)
     nameSprites()
 
-    ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.52, 32), new THREE.MeshBasicMaterial({ color }))
+    ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.54, 32), new THREE.MeshBasicMaterial({ color: css('--team2') || color }))
     ring.rotation.x = -Math.PI / 2
     ring.position.y = 0.01
     scene.add(ring)

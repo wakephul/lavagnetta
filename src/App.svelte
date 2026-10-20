@@ -1,7 +1,7 @@
 <script lang="ts">
   import { inkOn } from './lib/color'
   import { match, route } from './lib/router.svelte'
-  import { app, canEdit, load, teamColor } from './lib/store.svelte'
+  import { app, canEdit, load, teamColor, teamColor2 } from './lib/store.svelte'
   import Editor from './pages/Editor.svelte'
   import Home from './pages/Home.svelte'
   import Login from './pages/Login.svelte'
@@ -36,7 +36,7 @@
     {/if}
   </main>
 {:else}
-  <div class="app" style="--accent: {teamColor()}; --accent-ink: {inkOn(teamColor())}">
+  <div class="app" style="--accent: {teamColor()}; --accent-ink: {inkOn(teamColor())}; --team2: {teamColor2()}">
     {#if route.path === '/allenatore'}
       {#if canEdit()}
         <Home />

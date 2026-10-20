@@ -6,14 +6,15 @@
 
   let name = $state(app.data?.team.name ?? '')
   let color = $state(app.data?.team.color ?? '#1d5fbf')
+  let color2 = $state(app.data?.team.color2 ?? '#e8601c')
   let teamMsg = $state('')
 
   async function saveTeam(e: SubmitEvent) {
     e.preventDefault()
     teamMsg = ''
     try {
-      await call((t) => api.setTeam(t, name.trim(), color))
-      if (app.data) app.data.team = { name: name.trim(), color }
+      await call((t) => api.setTeam(t, name.trim(), color, color2))
+      if (app.data) app.data.team = { name: name.trim(), color, color2 }
       teamMsg = 'Salvato.'
     } catch (err) {
       teamMsg = err instanceof Error ? err.message : String(err)
@@ -54,10 +55,17 @@
         Nome
         <input type="text" bind:value={name} maxlength="60" />
       </label>
-      <label class="field color">
-        Colore delle pedine
-        <input type="color" bind:value={color} />
-      </label>
+      <div class="colors">
+        <label class="field color">
+          Colore delle pedine
+          <input type="color" bind:value={color} />
+        </label>
+        <label class="field color">
+          Secondo colore
+          <input type="color" bind:value={color2} />
+          <span class="small">Area dipinta e "chi sei".</span>
+        </label>
+      </div>
       <div class="actions">
         {#if teamMsg}<span class="small muted">{teamMsg}</span>{/if}
         <button class="btn primary" disabled={!name.trim()}>Salva</button>
@@ -106,6 +114,11 @@
   }
   .actions {
     align-items: center;
+  }
+  .colors {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
   }
   .color input {
     width: 64px;

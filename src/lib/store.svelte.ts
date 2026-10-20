@@ -6,6 +6,10 @@ import type { Play, PlayData } from './types'
 
 const SESSION_KEY = 'lavagnetta.sessione'
 const LINEUP_KEY = 'lavagnetta.quintetto'
+const COLORS_KEY = 'lavagnetta.colori'
+
+/** Colori della squadra visti l'ultima volta su questo dispositivo, per la pagina d'accesso. */
+export const lastColors = () => read<{ color: string; color2: string } | null>(COLORS_KEY, null)
 
 type Session = { token: string; role: Role }
 export type Lineup = { players: (string | null)[]; me: number | null }
@@ -38,6 +42,7 @@ export const app = $state({
 
 export const canEdit = () => app.session?.role === 'edit' && app.data?.role === 'edit'
 export const teamColor = () => app.data?.team.color ?? '#1d5fbf'
+export const teamColor2 = () => app.data?.team.color2 ?? '#e8601c'
 
 function onError(e: unknown): never {
   if (e instanceof ApiError && e.kind === 'session') {
@@ -58,6 +63,8 @@ export async function load() {
   app.error = ''
   try {
     app.data = await api.teamData(app.session.token)
+    // Così la pagina d'accesso usa i colori della squadra anche la volta dopo.
+    write(COLORS_KEY, { color: app.data.team.color, color2: app.data.team.color2 })
   } catch (e) {
     app.error = e instanceof Error ? e.message : String(e)
     if (e instanceof ApiError && e.kind === 'session') setSession(null)

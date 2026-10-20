@@ -59,7 +59,8 @@ Serve un account GitHub e un account [Supabase](https://supabase.com), tutti e d
    Più avanti le password si cambiano da **Impostazioni** nell'app.
 4. In Supabase, da **Project Settings → API**, copia l'URL del progetto e la chiave *publishable* (o *anon*). Nel tuo fork, in **Settings → Secrets and variables → Actions → Variables**, crea `SUPABASE_URL` e `SUPABASE_KEY` con quei valori. La chiave è pubblica per costruzione: il database accetta solo le funzioni dello schema, che controllano la sessione.
 5. In **Settings → Pages** scegli *GitHub Actions* come sorgente.
-6. Fai un push su `main`. Dopo un paio di minuti il sito è su `https://<utente>.github.io/<repository>/`.
+6. Metti il logo della tua squadra in `public/logo.webp` e le icone in `public/favicon.png` (64 px) e `public/apple-touch-icon.png` (180 px), oppure cancellali: senza logo l'app funziona lo stesso. I colori si scelgono da **Impostazioni**.
+7. Fai un push su `main`. Dopo un paio di minuti il sito è su `https://<utente>.github.io/<repository>/`.
 
 Il piano gratuito di Supabase mette in pausa i progetti fermi da una settimana. Il workflow `keepalive.yml` chiama il database ogni tre giorni per evitarlo.
 

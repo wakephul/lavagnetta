@@ -110,7 +110,7 @@
   <Court {situation} {color} />
 
   {#each trails as d}
-    <path {d} fill="none" stroke="var(--def)" stroke-opacity="0.35" stroke-width="0.05" stroke-dasharray="0.08 0.14" />
+    <path {d} fill="none" stroke="var(--def-line)" stroke-opacity="0.6" stroke-width="0.05" stroke-dasharray="0.08 0.14" />
   {/each}
 
   <g class="marks" opacity={fade}>
@@ -158,9 +158,9 @@
         {#if picked?.side === 'def' && picked.i === i}
           <circle r={DEF_R + 0.2} fill="none" stroke={color} stroke-width="0.08" />
         {/if}
-        <path d="M{DEF_R + 0.33} 0L{DEF_R + 0.1} -0.17L{DEF_R + 0.1} 0.17Z" fill="var(--def)" transform="rotate({facing(p)})" />
-        <circle r={DEF_R} fill="var(--def)" />
-        <text class="num" fill="#fff" font-size="0.4">X{i + 1}</text>
+        <path d="M{DEF_R + 0.33} 0L{DEF_R + 0.1} -0.17L{DEF_R + 0.1} 0.17Z" fill="var(--def-ink)" transform="rotate({facing(p)})" />
+        <circle r={DEF_R} fill="var(--def)" stroke="var(--def-ink)" stroke-width="0.06" />
+        <text class="num" fill="var(--def-ink)" font-size="0.4">X{i + 1}</text>
       </g>
     {/each}
   {/if}
@@ -172,7 +172,7 @@
   {#each frame.off as p, i}
     <g transform="translate({p.x} {p.y})" class="token off">
       {#if me === i || (picked?.side === 'off' && picked.i === i)}
-        <circle r={OFF_R + 0.18} fill="none" stroke={me === i ? color : 'var(--ink)'} stroke-width="0.09" />
+        <circle r={OFF_R + 0.18} fill="none" stroke={me === i ? `var(--team2, ${color})` : 'var(--ink)'} stroke-width={me === i ? 0.12 : 0.09} />
       {/if}
       <circle r={OFF_R} fill={color} stroke={ink === '#fff' ? '#fff' : '#1f1d1a'} stroke-width="0.07" />
       <text class="num" fill={ink} font-size="0.52">{i + 1}</text>

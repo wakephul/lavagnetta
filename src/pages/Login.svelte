@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { login } from '../lib/store.svelte'
+  import { inkOn } from '../lib/color'
+  import { lastColors, login } from '../lib/store.svelte'
 
   let { onDone, title = 'lavagnetta', hint = '' }: { onDone?: () => void; title?: string; hint?: string } = $props()
 
+  const colors = lastColors()
+  const accent = colors ? `--accent: ${colors.color}; --accent-ink: ${inkOn(colors.color)}` : '--accent: var(--ink)'
   let password = $state('')
   let error = $state('')
   let busy = $state(false)
@@ -20,8 +23,10 @@
   }
 </script>
 
-<main class="login">
+<main class="login" style={accent}>
   <form onsubmit={submit}>
+    <!-- Il logo è facoltativo: chi usa lavagnetta per un'altra squadra mette il suo in public/logo.webp. -->
+    <img class="logo" src="./logo.webp" alt="" width="112" height="112" onerror={(e) => ((e.currentTarget as HTMLImageElement).hidden = true)} />
     <h1>{title}</h1>
     <label class="field">
       Password
@@ -49,6 +54,11 @@
   h1 {
     font-size: 1.6rem;
     margin-bottom: 6px;
+    text-align: center;
+  }
+  .logo {
+    justify-self: center;
+    margin-bottom: 8px;
   }
   p {
     margin: 0;
